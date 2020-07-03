@@ -132,7 +132,7 @@ seed(1)
 # In[6]:
 
 
-os.chdir(os.path.dirname(os.path.abspath('')))
+os.chdir(os.path.dirname(os.path.abspath('nnlinux/Documentos/git-repos/doutorado')))
 
 def current_path(): 
     print("Current working directory ") 
@@ -238,10 +238,10 @@ data[['Investimento']].plot(figsize=(12,10));
 data[['Agropecuária','Indústria','Infraestrutura','Comércio e serviços', 'Total']].plot(figsize=(12,10));
 
 
-# # Ajuste Sazonal (X-13 ARIMA) das séries para otimizar a modelagem
+
 
 # In[18]:
-
+### Ajuste Sazonal (X-13 ARIMA) das séries para otimizar a modelagem
 
 X13_PATH = 'doutorado/x13/'
 
@@ -255,9 +255,9 @@ for col in data_sa:
 data_sa.tail()
 
 
-# # Visualiza dados ajustados
 
 # In[24]:
+# # Visualiza dados ajustados
 
 
 data_sa[['Agr','Ind','Inf','Com','Tot']].plot(figsize=(12,8));
@@ -358,13 +358,20 @@ y_train  = y_scaler.fit_transform(y_train)
 ### Build LSTM
 
 reg = Sequential()
-reg.add(LSTM(units = 200, activation = 'relu', input_shape=(n_qtr,n_features)))
+reg.add(LSTM(units = 200, activation = 'relu', input_shape=(n_qtr,n_features),
+             return_sequences=False))
+reg.add(Dropout(0.3))
 reg.add(Dense(4))
 
-opt = tf.keras.optimizers.RMSprop(learning_rate=1.0e-3)
+opt = tf.keras.optimizers.RMSprop(learning_rate=1.0e-4)
 
 reg.compile(loss='mse', optimizer=opt)
-reg.fit(X_train,y_train, epochs=100)
+history = reg.fit(X_train,y_train, epochs=200,batch_size=12,
+                  validation_split=0.1,shuffle=False)
+
+plt.plot(history.history['loss'], label='train')
+plt.plot(history.history['val_loss'], label='test')
+plt.legend()
 
 ###########################################################
 ### Evaluate Model: Prepare test dataset and test the LSTM
@@ -441,5 +448,32 @@ result = pd.concat([pd.Series(yhat),pd.Series(y_true)], axis = 1, sort=False)
 result.index = df_test.index[n_qtr:len(df_test)-1]
 result.columns = ['yhat','y']
 
+print(result)
+
 ##############################################
 # Make forecasts
+agro = pd.Series(np.zeros(12))
+ind = pd.Series(np.zeros(12))
+inf = pd.Series(np.zeros(12))
+com = pd.Series(np.zeros(12))
+
+dates_forecast = pd.date_range(start='2020-01-01', periods=12, freq='Q')
+df_forecast= pd.concat([agro, ind, inf, com], axis=1)
+df_forecast.index = pd.DatetimeIndex(dates_forecast)
+
+df_forecast = np.array(df_forecast)
+
+X_forecast = []
+
+for i in range(n_qtr, len(df_forecast)-n_qtr):
+
+    X_forecast.append(df_forecast[i-n_qtr:i,0:n_features])
+
+X_forecast = np.array(X_forecast)
+
+
+ypred = reg.predict(X_forecast)
+
+ypred = y_scaler.inverse_transform()
+
+ypred = sequence_to_series(ypred)
