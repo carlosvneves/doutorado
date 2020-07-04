@@ -2,50 +2,36 @@
 # coding: utf-8
 
 #%% Importa Bibliotecas
-import time
 
-from IPython import get_ipython
-# multivariate mlp example
+# bibliotecas para as redes neurais
 import tensorflow as tf
 tf.keras.backend.clear_session()
-
-from sklearn.metrics import mean_squared_error
-
-from keras.models import Model
-from keras.layers import Input
-from keras.layers import Dense
 from keras.layers.merge import concatenate
-from keras.models import Sequential
-from keras.layers import LSTM#,CuDNNLSTM
-from keras.layers import Flatten
-from keras.layers import Conv1D, MaxPooling1D
-from keras.layers import GRU
-from keras.layers import InputLayer
-from keras.layers import Bidirectional
-from keras.layers import Dropout
-from keras.layers import TimeDistributed
-from keras.layers import Reshape
-from keras.models import load_model
-
 from tensorflow import keras
 from tensorflow.python.keras.callbacks import TensorBoard
 
+
+# bibliotecas matemáticas
+from sklearn.metrics import mean_squared_error
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
-
 import statsmodels.api as sm
-
 from pandas import DataFrame
 from pandas import concat
 from sklearn.preprocessing import MinMaxScaler
-from sklearn.preprocessing import LabelEncoder
 
-# As novas versões do Pandas e Matplotlib trazem diversas mensagens de aviso ao desenvolvedor. Vamos desativar isso.
+
+# bilbiotecas de utilidades do sistema
 import sys
 import os
+import pickle
 from datetime import datetime
+import time
+from IPython import get_ipython
 
+# As novas versões do Pandas e Matplotlib trazem diversas mensagens de aviso ao desenvolvedor. Vamos desativar isso.
+# bibliotecas para visualização dos dados
 import warnings
 import matplotlib.cbook
 if not sys.warnoptions:
@@ -55,23 +41,19 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=matplotlib.cbook.mplDeprecation)
 
 
-# Imports para formatação dos gráficos
+# formatação dos gráficos
 plt.rcParams['axes.labelsize'] = 14
 plt.rcParams['xtick.labelsize'] = 12
 plt.rcParams['ytick.labelsize'] = 12
 plt.rcParams['text.color'] = 'k'
 from matplotlib.pylab import rcParams 
-rcParams['figure.figsize'] = 15,7
+rcParams['figure.figsize'] = 25,15
 matplotlib.style.use('ggplot')
 get_ipython().run_line_magic('matplotlib', 'inline')
 
 
 import keras.backend as K
 
-from tensorflow.compat.v1 import ConfigProto
-from tensorflow.compat.v1 import InteractiveSession
-
-import pickle
 
 gpu_options = tf.compat.v1.GPUOptions(per_process_gpu_memory_fraction = .98, allow_growth=True)
    
@@ -176,15 +158,32 @@ def train_model(data, cfg):
       # modelo de rede de acordo com a configuração
       model = keras.Sequential()
 
-
-      model.add(keras.layers.LSTM(n_neurons,activation = 'tanh',recurrent_activation = 'sigmoid',
+      # CUDNN LSTM implementation  
+      model.add(keras.layers.LSTM(units = n_neurons, activation = 'tanh',recurrent_activation = 'sigmoid',
                         recurrent_dropout = 0,unroll = False, use_bias = True,
                         input_shape=(train_X.shape[1], train_X.shape[2])))
       model.add(keras.layers.Dropout(dropout))
       model.add(keras.layers.Dense(hidden_nodes, activation = 'relu'))
       model.add(keras.layers.Dropout(dropout))
       model.add(keras.layers.Dense(1))
-
+      
+      # Stacked LSTM model
+# =============================================================================
+#       model.add(keras.layers.LSTM(units = n_neurons, activation = 'relu',recurrent_activation = 'sigmoid',
+#                         recurrent_dropout = 0,unroll = False, use_bias = True, return_sequences = True,
+#                         input_shape=(train_X.shape[1], train_X.shape[2])))
+#       # adicionar camada LSTM para usar o disposito de recorrência
+#       model.add(keras.layers.LSTM(units = n_neurons, activation = 'relu'))
+#       model.add(keras.layers.Dropout(dropout))
+#       model.add(keras.layers.Dense(hidden_nodes, activation = 'tanh'))
+#       model.add(keras.layers.Dropout(dropout))
+#       model.add(keras.layers.Dense(1))
+#       
+# =============================================================================
+      
+      
+      
+      
       learning_rate=1.0e-3
       
       #session = K.get_session()
@@ -615,7 +614,7 @@ def LSTM(data):
     
     #%% # Visualiza a previsão do modelo - dados de teste com menor MSE
     # Plot
-    plt.figure(figsize = (20, 6))
+    plt.figure()
     
     # Série original
     plt.plot(df.index, 
@@ -681,7 +680,7 @@ def main():
     
     # Gráfico com a séries original, previsão do modelo dentro da amostra
     # e previsão do modelo fora da amostra
-    plt.figure(figsize=(20, 10))
+    plt.figure()
     plt.plot(df_proj.index, df_proj['Inv'],
              label = 'Valores Observados')
     plt.plot(df_proj.index, df_proj['Inv_lstm'], 
