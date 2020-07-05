@@ -192,7 +192,7 @@ class Simulator:
         for i in range(resultado.shape[1]):
           result_mean[i] = np.mean(resultado[:,i])
         
-        model.save("models/model-pct-{}-{}.h5".format(series_par,model_par))  
+        model.save("models/model-{}-{}.h5".format(series_par,model_par))  
         #,datetime.now().strftime("%Y%m%d-%H%M%S")
         #model.summary()
           
@@ -467,7 +467,7 @@ class Simulator:
         print(best_par)
         
                 
-        best_file = 'model-pct-{}-n_endog,{}-n_steps,{}-n_train_steps,{}-n_features-{}-n_nodes,{}-n_epochs,{}-n_batch.h5'.format(best_par[0],
+        best_file = 'models/model-{}-n_endog,{}-n_steps,{}-n_train_steps,{}-n_features-{}-n_nodes,{}-n_epochs,{}-n_batch.h5'.format(best_par[0],
                                                                                                                                  best_par[1],
                                                                                                                                  best_par[2],
                                                                                                                                  best_par[3],
