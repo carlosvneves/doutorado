@@ -70,16 +70,7 @@ def main():
     # Versões dos pacotes usados neste jupyter notebook
     get_ipython().run_line_magic('reload_ext', 'watermark')
     get_ipython().run_line_magic('watermark', '-a "Carlos Eduardo Veras Neves" --iversions')
-    
-
-    # Prepara diretórios para armazenar arquivos gerados pela simulação
-    makedirs(MODELS_FLD) 
-    makedirs(FIGS_FLD)
-    makedirs(LOGS_FLD)
-    makedirs(PKL_FLD)
-
-
-    
+        
     print("**"*25)
     print('Início da Simulação:')
     print("**"*25)
@@ -127,7 +118,7 @@ def main():
     plt.xlabel('Ano')
     plt.ylabel('Investimento (%PIB)')
     plt.legend()
-    plt.savefig('{}/forecast-{}'.format(FIGS_FLD,simulator.get_model_arch()))
+    plt.savefig('figs/predictions-{}'.format(simulator.get_model_arch()))
     plt.show()
     
 if __name__ == '__main__':
