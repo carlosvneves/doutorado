@@ -35,6 +35,7 @@ class Simulator:
 
     
     #%%Treino da RNA
+    @tf.autograph.experimental.do_not_convert
     def train_model(self, cfg):
         """
         Função para treinamento das redes neurais
@@ -94,6 +95,7 @@ class Simulator:
         model.set_y_shape(test_X.shape[2])
         model.set_neurons(n_nodes)
         
+       
         if MODEL_ARCH == 'LSTM':
             model = model.lstm()
         elif MODEL_ARCH == 'LSTM-S':
@@ -102,36 +104,54 @@ class Simulator:
             model = model.lstm_bidirectional()
         elif MODEL_ARCH == 'GRU':
              model = model.gru()
+        elif MODEL_ARCH == 'CNN-LSTM':
+            model = model.cnn_lstm()
         else:
-          print("Erro! Modelo não especificado")
-          return
+            
+            print('**'*10)
+            print("Erro! Modelo não identificado.")
+            return
+                    
                  
         
         batch_size=n_batch
          
         learning_rate=1.0e-3
         
+        callbacks = []
+        
         opt = tf.keras.optimizers.RMSprop(learning_rate=learning_rate)
       
         model.compile(loss="mse", optimizer=opt, metrics=["mae"])
-      
-        tensorboard = TensorBoard(log_dir="logs/{}-{}-{}-{}-{}-".format(MODEL_ARCH,n_features, 
-                                                  n_nodes, n_epochs, n_batch) + 
-                                      datetime.now().strftime("%Y%m%d-%H%M%S"))  
+        
+        
              
         patience_callback = tf.keras.callbacks.EarlyStopping(monitor='loss', 
-                                                             patience=10)
-      
+                                                             patience=20)
+        
+        
+        callbacks.append(patience_callback)
+        
+        if TF_LOG == True:
+            tensorboard = TensorBoard(log_dir="{}/{}-{}-{}-{}-{}-".format(LOGS_FLD,
+                                                                          MODEL_ARCH,
+                                                                          n_features, 
+                                                      n_nodes, n_epochs, n_batch) + 
+                                          datetime.now().strftime("%Y%m%d-%H%M%S"))  
+            callbacks.append(tensorboard)    
+        
+        #print("\n --- Treinando o Modelo : ---\n")
         # fit network
         model.fit(train_X, train_y, epochs=n_epochs, batch_size=batch_size, 
                   validation_data=(test_X, test_y), verbose=0, shuffle=False, 
-                  callbacks=[patience_callback, tensorboard])
+                  callbacks=callbacks)
          
         
         return model, test_X, test_y,scaler
     
     
     #%% Avaliação do Modelo
+    @tf.autograph.experimental.do_not_convert
     def eval_model(self, cfg):
         """
         Função para avaliação das redes neurais com previsão dentro da amostra.
@@ -152,7 +172,9 @@ class Simulator:
 
         """  
         n_endog,n_steps, n_train_steps, n_features, n_nodes, n_epochs, n_batch = cfg
-          
+        
+        global MODEL_ARCH
+                
         resultado = []
         perf = np.zeros((self.n_rep))
           
@@ -160,6 +182,9 @@ class Simulator:
         # Vamos repetir o processo de treinamento por 20 vezes e armazenar todos os resultados, pois assim usaremos
         # diferentes amostras. Ao final, tiramos a média para encontrar as previsões. 
         # make a prediction
+        print('##'*25)
+        print(" --- Avaliando do Modelo : ---")
+        print('##'*25)
         print('\n')
         print('##'*35)
         series_par = "{}-n_endog,{}-n_steps,{}-n_train_steps,{}-n_features".format(n_endog,
@@ -170,12 +195,21 @@ class Simulator:
         model_par =  "{}-n_nodes,{}-n_epochs,{}-n_batch".format(n_nodes, n_epochs, n_batch)                                                                                                          
                                                                                                                     
         
-        print(f'## Avaliação do Modelo: \n{series_par}\n{model_par}\n ## ')
+        print(f'## Parâmetros: \n{series_par}\n{model_par}\n ## ')
         print(datetime.now().strftime("%Y/%m/%d-%H:%M:%S\n"))
         
-        for i in range(self.n_rep):
+        #l = len(perf)
+        
+        #printProgressBar(0, l, prefix = 'Progress-evaluation:', suffix = 'Complete', length = 50)
+
+        
+        for i in tqdm(range(self.n_rep)):
           
+           
           trainned_model, testx, testy, scaler = self.train_model(cfg)
+          
+          
+          
           #modelo.model.model
           test_x = testx
           test_y = testy
@@ -192,8 +226,8 @@ class Simulator:
           
           resultado.append(yhat)
           
-          print(f'\nRepetição:{i+1}')
-          print(f'# épocas:({n_epochs}) # neurônios:({n_nodes}) # batch:({n_batch})')
+          #print(f'\nRepetição:{i+1}')
+          #print(f'# épocas:({n_epochs}) # neurônios:({n_nodes}) # batch:({n_batch})')
           #print(f'loss:{round(modelo.history.history["loss"][-1],4)} - end val_loss: {round(modelo.history.history["val_loss"][-1],4)}\n')
           
           
@@ -204,6 +238,9 @@ class Simulator:
           y = y[:,0]
           
           perf[i] = self.performance(y,yhat)
+
+          #printProgressBar(i + 1, l, prefix = 'Progress-evaluation:', suffix = 'Complete', length = 50)
+
           
         perf_mean = np.mean(perf)
         resultado = np.array(resultado) 
@@ -213,7 +250,7 @@ class Simulator:
         for i in range(resultado.shape[1]):
           result_mean[i] = np.mean(resultado[:,i])
         
-        trainned_model.save("models/model-{}-{}-{}.h5".format(MODEL_ARCH,series_par,model_par))  
+        trainned_model.save("{}/model-{}-{}-{}.h5".format(MODELS_FLD,MODEL_ARCH,series_par,model_par))  
         #,datetime.now().strftime("%Y%m%d-%H%M%S")
         #model.summary()
           
@@ -223,6 +260,7 @@ class Simulator:
     
     #%%Grid Search
     # Função para o Grid Search
+    @tf.autograph.experimental.do_not_convert
     def grid_search(self):
         """
         Função que implementa o algoritmo de grid search para avaliação dos 
@@ -241,15 +279,24 @@ class Simulator:
         errors = []
         results = []
         hyperparams = []
-
+         
         # Gera os scores
         config = self.config
-        for cfg in config:
+        l = len(config)
+        # Initial call to print 0% progress
+        print("\n")
+        printProgressBar(0, l, prefix = 'Progress-grid search:', suffix = 'Complete', length = 50)
+        
+        #for i,cfg in enumerate(config):
+        for i,cfg in enumerate(config):
           result,error,hyper = self.eval_model(cfg) 
           results.append(result)
           errors.append(error)
           hyperparams.append(hyper)
-
+          # Update Progress Bar
+          printProgressBar(i + 1, l, prefix = 'Progress-grid search:', suffix = 'Complete', length = 50)
+          print("\n")
+        
         # Ordena os hiperparâmetros pelo erro
         #errors.sort(key = lambda tup: tup[1])
         return results,errors, hyperparams
@@ -286,6 +333,7 @@ class Simulator:
     
     
     #%% Execução do Modelo com grid searh
+    @tf.autograph.experimental.do_not_convert
     def run_grid_search(self):
         """
         Função que executa o algoritmo de grid search.
@@ -383,9 +431,9 @@ class Simulator:
         """    
         mse = mean_squared_error(y_true,y_pred)
         mape = mean_squared_error(y_true,y_pred)
-        print('MSE das previsões é {}'.format(round(mse, 2))+
-                      '\nRMSE das previsões é {}'.format(round(np.sqrt(mse), 2))+
-                      '\nMAPE das previsões é {}'.format(round(mape, 2)))
+        print('\nMSE:{}'.format(round(mse, 2))+
+                       '-RMSE:{}'.format(round(np.sqrt(mse), 2))+
+                      '-MAPE:{}\n'.format(round(mape, 2)))
         return mse
 
     #%% Realiza previsão fora da amostra 
@@ -419,8 +467,8 @@ class Simulator:
     # =============================================================================
       
         
-        n_exog = self.data.shape[1]-1
-        n_features = self.data.shape[1]
+        n_exog = data.shape[1]-1
+        n_features = data.shape[1]
         ##############################################
         # Make forecasts
         #n_ahead = 12
@@ -504,7 +552,8 @@ class Simulator:
         
         return df_proj, pred_list
 
-    #%% Função que simula modelo LSTM
+    #%% Função que simula modelo
+    @tf.autograph.experimental.do_not_convert
     def run_simulation(self):
         """
         Função que executa a simulação.
@@ -517,6 +566,7 @@ class Simulator:
             Lista dos parâmetros do modelo com o melhor desempenho.
 
         """    
+        global MODEL_ARCH
         
         from numpy.random import seed
         seed(1)
@@ -535,11 +585,11 @@ class Simulator:
         
         # Escreve os resultados em arquivo
           
-        with open('best_{}_res.pkl'.format(MODEL_ARCH), 'wb') as fp:
+        with open('{}/best_{}_res.pkl'.format(PKL_FLD, MODEL_ARCH), 'wb') as fp:
             pickle.dump(best_res, fp) 
         
         
-        with open('best_{}_par.pkl'.format(MODEL_ARCH), 'wb') as fp:
+        with open('{}/best_{}_par.pkl'.format(PKL_FLD, MODEL_ARCH), 'wb') as fp:
             pickle.dump(best_par, fp)  
         
         
@@ -553,12 +603,13 @@ class Simulator:
                   color = 'Red')
         plt.plot(df.index[-len(best_res):], 
                  best_res,
-                 label = 'Previsões com Modelo de Redes Neurais LSTM', 
+                 label = 'Previsões com Modelo de Redes Neurais {}'.format(MODEL_ARCH), 
                  color = 'Black')
         plt.title('Previsões com Modelo de Redes Neurais Recorrentes')
         plt.xlabel('Ano')
         plt.ylabel('Investimento (%PIB)')
         plt.legend()
+        plt.savefig('{}/predictions-{}'.format(FIGS_FLD,MODEL_ARCH))
         plt.show()    
         
         return best_res, best_par
@@ -583,14 +634,16 @@ class Simulator:
             rede neural.
             
 
-        """    
-        with open ('best_{}_par.pkl'.format(MODEL_ARCH), 'rb') as fp:
+        """ 
+        global MODEL_ARCH
+
+        with open ('{}/best_{}_par.pkl'.format(PKL_FLD,MODEL_ARCH), 'rb') as fp:
             best_par = pickle.load(fp)
        
         print(best_par)
         
                 
-        best_file = 'models/model-{}-{}-n_endog,{}-n_steps,{}-n_train_steps,{}-n_features-{}-n_nodes,{}-n_epochs,{}-n_batch.h5'.format(MODEL_ARCH,
+        best_file = '{}/model-{}-{}-n_endog,{}-n_steps,{}-n_train_steps,{}-n_features-{}-n_nodes,{}-n_epochs,{}-n_batch.h5'.format(MODELS_FLD, MODEL_ARCH,
                                                                                                                                  best_par[0],
                                                                                                                                  best_par[1],
                                                                                                                                  best_par[2],
@@ -607,7 +660,7 @@ class Simulator:
         best_model.summary()
         print('##'*25)
         
-        with open ('best_{}_res.pkl'.format(MODEL_ARCH), 'rb') as fp:
+        with open ('{}/best_{}_res.pkl'.format(PKL_FLD, MODEL_ARCH), 'rb') as fp:
             best_res = pickle.load(fp)
     
         n_inputs = best_par[1]        
@@ -643,7 +696,7 @@ class Simulator:
         self.n_batch = config[6]
         self.data = data
         self.n_rep = 10
-            
+        logging.info('## Redes Neurais construídas ##')    
         
     #%% Setters
     def set_n_endog(self, n_endog):
@@ -807,6 +860,7 @@ class Simulator:
         """
         global MODEL_ARCH 
         MODEL_ARCH = model_arch
+        
     def get_model_arch(self):
         """
         

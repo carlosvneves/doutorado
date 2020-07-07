@@ -32,6 +32,7 @@ import os
 import pickle
 from datetime import datetime
 import time
+import logging
 from IPython import get_ipython
 
 # As novas versões do Pandas e Matplotlib trazem diversas mensagens de aviso ao desenvolvedor. Vamos desativar isso.
@@ -45,25 +46,60 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=matplotlib.cbook.mplDeprecation)
 
 
-# formatação dos gráficos
+#%% Parâmetros para formatação dos gráficos
 plt.rcParams['axes.labelsize'] = 14
 plt.rcParams['xtick.labelsize'] = 12
 plt.rcParams['ytick.labelsize'] = 12
 plt.rcParams['text.color'] = 'k'
 from matplotlib.pylab import rcParams 
-rcParams['figure.figsize'] = 25,15
-matplotlib.style.use('ggplot')
+rcParams['figure.figsize'] = 20,25
+matplotlib.style.use('fivethirtyeight')
 get_ipython().run_line_magic('matplotlib', 'inline')
 
+from tqdm import tqdm
 
-import keras.backend as K
 
+#%% Definições para o log do Tensorflow/Tensorboard
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '0'  # or any {'0', '1', '2'}
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
+TF_LOG = False
+
+#%% Definições das pastas para armazenar arquivos produzidos pela simulação
+MODELS_FLD = os.path.join('..','models')
+FIGS_FLD = os.path.join('..','figs')
+LOGS_FLD = os.path.join('..','logs')
+PKL_FLD = os.path.join('..','pkl')
+os.environ['NUMEXPR_MAX_THREADS'] = '9'
+#%% Função para criação dos diretórios
 def makedirs(fld):
-	if not os.path.exists(fld):
-		os.makedirs(fld)
+    """
+    
+
+    Parameters
+    ----------
+    fld : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    None.
+
+    """
+    if not os.path.exists(fld):
+        os.makedirs(fld)
+
 
 #%% Carrega os dados
 def load_data():
+    """
+    
+
+    Returns
+    -------
+    data : TYPE
+        DESCRIPTION.
+
+    """
     
     # Carrega os dados
     github_repo = 'https://raw.githubusercontent.com/carlosvneves/doutorado/master/'
@@ -100,12 +136,41 @@ def load_data():
 
 
     # Visualiza os dados originais
-    data[['Investimento']].plot(figsize=(12,10));
-    data[['Agropecuária','Indústria','Infraestrutura','Comércio e serviços', 'Total']].plot(figsize=(12,10));
+    plt.figure()
+    plt.plot(data.index,data[['Investimento']],
+             label = 'Investimentos como % do PIB')
+    plt.xlabel('Ano')
+    plt.ylabel('FBCF (%PIB)')
+    plt.legend()
+    plt.title('Formação Bruta de Capital Fixo como % do PIB')
+    plt.savefig('{}/investimentos'.format(FIGS_FLD))
+    plt.show()
+    
+    plt.figure()
+    plt.plot(data.index,data[['Agropecuária']],
+             label = 'Aropecuária como % do PIB')
+    plt.plot(data.index,data[['Indústria']],
+             label = 'Induśtria como % do PIB')
+    plt.plot(data.index,data[['Infraestrutura']],
+             label = 'Infraestrutura como % do PIB')
+    plt.plot(data.index,data[['Comércio e serviços']],
+             label = 'Comércio e Serviços como % do PIB')
+    plt.plot(data.index,data[['Total']],
+             label = 'Total como % do PIB')
+    plt.title('Desembolsos do BNDES como % do PIB')
+    plt.xlabel('Ano')
+    plt.ylabel('FBCF (%PIB)')
+    plt.legend()
+    plt.savefig('{}/desembolsos'.format(FIGS_FLD))
+    plt.show()
+      
+    
+    
+    data[['Agropecuária','Indústria','Infraestrutura','Comércio e serviços', 'Total']]
     
     
     # Ajuste Sazonal (X-13 ARIMA) das séries para otimizar a modelagem
-    X13_PATH = 'x13/'
+    X13_PATH = os.path.join('..','x13')
     
     data_sa = pd.DataFrame(data)
     data_sa.rename(columns=lambda x: x[0:3], inplace=True)
@@ -119,10 +184,33 @@ def load_data():
     
     # Visualiza dados com ajuste sazonal 
     
-    data_sa[['Agr','Ind','Inf','Com','Tot']].plot(figsize=(12,8));
-    data_sa['Inv'].plot(figsize=(12,8));
+    plt.figure()
+    plt.plot(data_sa.index,data_sa[['Inv']],
+             label = 'Investimentos como % do PIB')
+    plt.xlabel('Ano')
+    plt.ylabel('FBCF (%PIB)')
+    plt.legend()
+    plt.title('Formação Bruta de Capital Fixo como % do PIB - ajuste sazonal')
+    plt.savefig('{}/investimentos-sa'.format(FIGS_FLD))
+    plt.show()
     
-     
+    plt.figure()
+    plt.plot(data_sa.index,data_sa[['Agr']],
+             label = 'Aropecuária como % do PIB')
+    plt.plot(data_sa.index,data_sa[['Ind']],
+             label = 'Induśtria como % do PIB')
+    plt.plot(data_sa.index,data_sa[['Inf']],
+             label = 'Infraestrutura como % do PIB')
+    plt.plot(data_sa.index,data_sa[['Com']],
+             label = 'Comércio e Serviços como % do PIB')
+    plt.plot(data_sa.index,data_sa[['Tot']],
+             label = 'Total como % do PIB')
+    plt.title('Desembolsos do BNDES como % do PIB - ajuste sazonal')
+    plt.xlabel('Ano')
+    plt.ylabel('FBCF (%PIB)')
+    plt.legend()
+    plt.savefig('{}/desembolsos-sa'.format(FIGS_FLD))
+    plt.show() 
     #  Unsample dos dados de Trim para Mensal
     upsampled = data_sa.resample('M')
     interpolated = upsampled.interpolate(method='linear')
@@ -137,100 +225,24 @@ def load_data():
     
     return data
 
- #%% Realiza previsão fora da amostra 
-    def forecast(self, data, n_inputs, n_predictions, model):
-            
-    # =============================================================================
-    #     model = load_model('model-4-n_endog,36-n_quarters,36-n_train_steps,5-n_features-300-n_nodes,100-n_epochs,32-n_batch.h5')
-    #     print(model.summary())
-    #     df = load_data()    
-    #     df = df[['Inv', 'Agr', 'Ind', 'Inf', 'Com']] 
-    # =============================================================================
-        
-        n_exog = data.shape[1]-1
-        n_features = data.shape[1]
-        ##############################################
-        # Make forecasts
-        #n_ahead = 12
-        #n_before =24
-         
-    # =============================================================================
-    #     inv = pd.Series(np.full(n_before,df.iloc[-n_before:]['Inv']))
-    # # =============================================================================
-    #     agro = pd.Series(np.full(n_before,np.mean(df.iloc[-n_before:]['Agr'])))
-    #     ind = pd.Series(np.full(n_before,np.mean(df.iloc[-n_before:]['Ind'])))
-    #     inf = pd.Series(np.full(n_before,np.mean(df.iloc[-n_before:]['Inf'])))
-    #     com = pd.Series(np.full(n_before,np.mean(df.iloc[-n_before:]['Com'])))
-    # #     
-    # # =============================================================================
-    # # =============================================================================
-    # #     agro = pd.Series(np.zeros(n_before))
-    # #     ind = pd.Series(np.zeros(n_before))
-    # #     inf = pd.Series(np.zeros(n_before))
-    # #     com = pd.Series(np.zeros(n_before))
-    # # =============================================================================
-    #     inv = pd.Series(np.zeros(n_before))
-    #     
-    #     
-    #      
-    #     
-    #     df_forecast= pd.concat([inv,agro, ind, inf, com], axis=1)
-    #     #dates_forecast = pd.date_range(start='2020-01-01', periods=n_before, freq='M')
-    #     dates_forecast = pd.date_range(start=df.index[-n_before], periods=n_before, freq='M')
-    #     df_forecast.index = pd.DatetimeIndex(dates_forecast)
-    #     df_forecast.columns = df.columns
-    #     
-    #     strip = len(df) - n_before
-    #     # ,df.iloc[-n_ahead:],df_forecast
-    #     df_forecast = pd.concat((df.iloc[:strip],df_forecast),axis=0)
-    # =============================================================================
-            
-        values = data.values
-        values = values.astype('float32')
-        scaler = MinMaxScaler(feature_range=(0, 1))
-        scaled = scaler.fit_transform(values)
-        
-        #n_quarters = 36
-        
-        n_features = data.shape[1]
-        
-        reframed = self.series_to_supervised(scaled, n_inputs, 1)
-        
-        values = reframed.values
-    
-        n_obs = n_inputs * n_features
-        
-        test_X = values[:, :n_obs]
-        
-        test_X = test_X.reshape((test_X.shape[0], n_inputs, n_features))
-        
-        # previsão por meio de batches
-        pred_list = []
-        y_unscaled = []
-        n_steps=n_predictions
-        
-        for i in range(n_steps):
-            batch = test_X[i].reshape((1, n_inputs, n_features))
-            pred = model.predict(batch, verbose=1)
-            batch = batch.reshape((1, n_inputs*n_features))
-            inv_y = concatenate((np.array(pred), batch[:, -n_exog:]), axis=1)
-            y_unscaled.append(np.array(inv_y))
-            y = scaler.inverse_transform(inv_y)
-            pred_list.append(y)
-            batch = batch.reshape((1, n_inputs, n_features))
-            batch = np.append(batch[:,1:,:], np.array(inv_y))
-                
-    
-        yhat = np.array(pred_list)[:,:,0]
-        
-        add_dates = [data.index[-1] + pd.DateOffset(months=x) for x in range(0,n_steps+1) ]
-        future_dates = pd.DataFrame(index=add_dates[1:],columns=data.columns)
-        
-        df_predict = pd.DataFrame(yhat,
-                              index=future_dates[-n_steps:].index, columns=['Prediction'])
-        
-        df_proj = pd.concat([data,df_predict], axis=1)
-       
-        
-        return df_proj, pred_list
-
+# Print iterations progress
+def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█', printEnd = "\r"):
+    """
+    Call in a loop to create terminal progress bar
+    @params:
+        iteration   - Required  : current iteration (Int)
+        total       - Required  : total iterations (Int)
+        prefix      - Optional  : prefix string (Str)
+        suffix      - Optional  : suffix string (Str)
+        decimals    - Optional  : positive number of decimals in percent complete (Int)
+        length      - Optional  : character length of bar (Int)
+        fill        - Optional  : bar fill character (Str)
+        printEnd    - Optional  : end character (e.g. "\r", "\r\n") (Str)
+    """
+    percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
+    filledLength = int(length * iteration // total)
+    bar = fill * filledLength + '-' * (length - filledLength)
+    print(f'\r{prefix} |{bar}| {percent}% {suffix}', end = printEnd)
+    # Print New Line on Complete
+    if iteration == total: 
+        print()

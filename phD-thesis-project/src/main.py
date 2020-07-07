@@ -64,15 +64,253 @@ def config_model(n_exog = [4], n_steps = [8], n_train_steps = [24], n_features =
     print('\nTotal de Combinações de Hiperparâmetros: %d' % len(configs))
     return configs
 
+def run_lstm(data):
+    """
+    Função que executa a simulação com a arquitetura de rede LSTM.
+
+    Returns
+    -------
+    None.
+
+    """
+         
+    config = config_model(n_steps = [24,36],n_train_steps = [24,36],n_batch = [16,32])
+
+    simulator = Simulator(data, config)
+    simulator.set_model_arch('LSTM')
+    #best_res, best_par = simulator.run_simulation()
+    
+    # Carrega o modelo que apresentou o melhor resultado na simulação
+    best_model, best_res, n_inputs = simulator.load_best_model()
+   
+    df_proj, pred_list = simulator.forecast(data, n_inputs, 24, best_model)
+    
+
+    model_name = 'Inv_{}'.format(simulator.get_model_arch())    
+
+    # Cria Data Frame a partir da melhor previsão dentro da amostra
+    df_NN = pd.DataFrame(best_res, columns=[model_name])
+    df_NN.index = data.index[-len(df_NN):]     
+  
+    
+    # Cria Data Frame com todos os resultados    
+    df_proj = pd.concat([df_proj,df_NN], axis=1)
+    
+    plot_results(df_proj, model_name)
+    
+    return
+
+def run_lstm_bidirecccional(data):
+    """
+    Função que executa a simulação com a arquitetura de rede LSTM-Bidirecional.
+
+    Returns
+    -------
+    None.
+
+    """
+    config = config_model(n_steps = [24,36],n_train_steps = [24,36],n_batch = [16,32])
+
+    simulator = Simulator(data, config)
+    simulator.set_model_arch('LSTM-B')
+    best_res, best_par = simulator.run_simulation()
+    
+    # Carrega o modelo que apresentou o melhor resultado na simulação
+    best_model, best_res, n_inputs = simulator.load_best_model()
+   
+    df_proj, pred_list = simulator.forecast(data, n_inputs, 24, best_model)
+    
+
+    model_name = 'Inv_{}'.format(simulator.get_model_arch())    
+
+    # Cria Data Frame a partir da melhor previsão dentro da amostra
+    df_NN = pd.DataFrame(best_res, columns=[model_name])
+    df_NN.index = data.index[-len(df_NN):]      
+  
+    
+    # Cria Data Frame com todos os resultados    
+    df_proj = pd.concat([df_proj,df_NN], axis=1)
+    
+    plot_results(df_proj, model_name)    
+    
+    return
+
+def run_lstm_stacked(data):
+    """
+    Função que executa a simulação com a arquitetura de rede LSTM empilhado.
+
+    Returns
+    -------
+    None.
+
+    """
+    config = config_model(n_steps = [24,36],n_train_steps = [24,36],n_batch = [16,32])
+
+    simulator = Simulator(data, config)
+    simulator.set_model_arch('LSTM-S')
+    #best_res, best_par = simulator.run_simulation()
+    
+    # Carrega o modelo que apresentou o melhor resultado na simulação
+    best_model, best_res, n_inputs = simulator.load_best_model()
+   
+    df_proj, pred_list = simulator.forecast(data, n_inputs, 24, best_model)
+    
+
+    
+    model_name = 'Inv_{}'.format(simulator.get_model_arch())    
+
+    # Cria Data Frame a partir da melhor previsão dentro da amostra
+    df_NN = pd.DataFrame(best_res, columns=[model_name])
+    df_NN.index = data.index[-len(df_NN):]       
+  
+    
+    # Cria Data Frame com todos os resultados    
+    df_proj = pd.concat([df_proj,df_NN], axis=1)
+    
+    plot_results(df_proj, model_name)    
+    
+    return
+
+def run_gru(data):
+    """
+    Função que executa a simulação com a arquitetura de rede GRU.
+
+    Returns
+    -------
+    None.
+
+    """
+    
+    config = config_model(n_steps = [24,36],n_train_steps = [24,36],n_batch = [16,32])
+
+    simulator = Simulator(data, config)
+    simulator.set_model_arch('GRU')
+    best_res, best_par = simulator.run_simulation()
+    
+    # Carrega o modelo que apresentou o melhor resultado na simulação
+    best_model, best_res, n_inputs = simulator.load_best_model()
+   
+    df_proj, pred_list = simulator.forecast(data, n_inputs, 24, best_model)
+    
+
+    
+    model_name = 'Inv_{}'.format(simulator.get_model_arch())    
+
+    # Cria Data Frame a partir da melhor previsão dentro da amostra
+    df_NN = pd.DataFrame(best_res, columns=[model_name])
+    df_NN.index = data.index[-len(df_NN):]       
+  
+    
+    # Cria Data Frame com todos os resultados    
+    df_proj = pd.concat([df_proj,df_NN], axis=1)
+    
+    plot_results(df_proj, model_name)    
+
+    return
+@tf.autograph.experimental.do_not_convert
+def run_cnnn_lstm(data):
+    """
+    Função que executa a simulação com a arquitetura de rede CNN-LSTM.
+
+    Returns
+    -------
+    None.
+
+    """
+    config = config_model(n_steps = [24,36],n_train_steps = [24,36],n_batch = [16,32])
+
+    simulator = Simulator(data, config)
+    simulator.set_model_arch('CNN-LSTM')
+    best_res, best_par = simulator.run_simulation()
+    
+    # Carrega o modelo que apresentou o melhor resultado na simulação
+    best_model, best_res, n_inputs = simulator.load_best_model()
+   
+    df_proj, pred_list = simulator.forecast(data, n_inputs, 24, best_model)
+    
+   
+    model_name = 'Inv_{}'.format(simulator.get_model_arch())    
+
+    # Cria Data Frame a partir da melhor previsão dentro da amostra
+    df_NN = pd.DataFrame(best_res, columns=[model_name])
+    df_NN.index = data.index[-len(df_NN):]   
+  
+ 
+    # Cria Data Frame com todos os resultados    
+    df_proj = pd.concat([df_proj,df_NN], axis=1)
+    
+
+    
+    plot_results(df_proj, model_name)
+    
+    
+    
+    return
+
+#%% Visualização dos resultados da simulação
+def plot_results(data, model_name):
+    """
+     Função para visualização da série original, previsão do modelo dentro da amostra
+     e previsão do modelo fora da amostra
+
+    Parameters
+    ----------
+    data : TYPE
+        DESCRIPTION.
+    model_name : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    None.
+
+    """
+    
+    plt.figure()
+    plt.plot(data.index, data['Inv'],
+             label = 'Valores Observados')
+    plt.plot(data.index, data[str(model_name)], 
+             label = 'Rede Neural - dentro da amostra',color='black')
+    plt.plot(data.index, data['Prediction'], 
+             label = 'Rede Neural - fora da amostra',color='blue')
+
+    plt.title('Previsões com Modelo de Redes Neurais Recorrentes')
+    plt.xlabel('Ano')
+    plt.ylabel('Investimento (%PIB)')
+    plt.legend()
+    plt.savefig('{}/forecast-{}'.format(FIGS_FLD,model_name))
+    plt.show()
 
 #%% Função principal
 def main():
-    # Versões dos pacotes usados neste jupyter notebook
+    """
+    Função principal para execução do código.
+
+    Returns
+    -------
+    None.
+
+    """
+    # abre arquivo para gravar a saída da simulação em arquivo
+    #sys.stdout = open('{}/{}-app.log'.format(LOGS_FLD,datetime.now().strftime("%Y%m%d-%H%M%S")), 'w')
+    logging.basicConfig(filename='{}/{}-app.log'.format(LOGS_FLD,datetime.now().strftime("%Y%m%d-%H%M%S")),
+                        level=logging.INFO)
+    logging.info('## Início do log ##')
+    
+    
+    # Versões dos pacotes usados neste código
     get_ipython().run_line_magic('reload_ext', 'watermark')
     get_ipython().run_line_magic('watermark', '-a "Carlos Eduardo Veras Neves" --iversions')
-        
+    
+
+    # Prepara diretórios para armazenar arquivos gerados pela simulação
+    makedirs(MODELS_FLD) 
+    makedirs(FIGS_FLD)
+    makedirs(LOGS_FLD)
+    makedirs(PKL_FLD)
+
     print("**"*25)
-    print('Início da Simulação:')
+    print('--- Início da Simulação: ---')
     print("**"*25)
     
     df = load_data()
@@ -80,46 +318,27 @@ def main():
         
     df = df[var]
     
-    config = config_model(n_steps = [24,36],n_train_steps = [24,36],n_batch = [16,32])
+    
+    run_lstm(df)
+    #run_lstm_stacked(df)
+    #run_lstm_bidirecccional(df)
+    #run_gru(df)
+    #run_cnnn_lstm(df)
+    
+    
+    
+    
+    print("**"*25)
+    print('-- Fim da Simulação: --')
+    print("**"*25)
+    
+    logging.info('## Fim do log ##')
 
-    simulator = Simulator(df, config)
-    simulator.set_model_arch('LSTM')
-    #best_res_lstm, best_par_lstm = simulator.run_simulation()
-    
-    # Carrega o modelo que apresentou o melhor resultado na simulação
-    best_lstm_model, best_lstm_res, n_inputs = simulator.load_best_model()
-   
-    df_proj, pred_list = simulator.forecast(df, n_inputs, 24, best_lstm_model)
-    
+    #sys.stdout.close()
 
-    
-    # Cria Data Frame a partir da melhor previsão dentro da amostra
-    df_lstm = pd.DataFrame(best_lstm_res, columns=['Inv_lstm'])
-    df_lstm.index = df.index[-len(df_lstm):]  
-  
-    
-    # Cria Data Frame com todos os resultados    
-    df_proj = pd.concat([df_proj,df_lstm], axis=1)
 
-    
-    # Gráfico com a série original, previsão do modelo dentro da amostra
-    # e previsão do modelo fora da amostra
-    plt.figure()
-    plt.plot(df_proj.index, df_proj['Inv'],
-             label = 'Valores Observados')
-    plt.plot(df_proj.index, df_proj['Inv_lstm'], 
-             label = 'Rede Neural - dentro da amostra',color='black')
-    plt.plot(df_proj.index, df_proj['Prediction'], 
-             label = 'Rede Neural - fora da amostra',color='blue')
 
-    plt.xticks(fontsize=12)
-    plt.yticks(fontsize=12)
-    plt.title('Previsões com Modelo de Redes Neurais Recorrentes')
-    plt.xlabel('Ano')
-    plt.ylabel('Investimento (%PIB)')
-    plt.legend()
-    plt.savefig('figs/predictions-{}'.format(simulator.get_model_arch()))
-    plt.show()
+
     
 if __name__ == '__main__':
 	main()

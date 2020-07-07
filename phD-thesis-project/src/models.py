@@ -76,18 +76,18 @@ class Models:
 
 
         #número de neurônios nas camadas ocultas
-        hidden_nodes = int(n_nodes*2/3)
+        hidden_nodes = int(self.neurons*2/3)
         dropout = 0.2
         # modelo de rede de acordo com a configuração
         model = keras.Sequential()
 
 
         # Stacked LSTM model
-        model.add(keras.layers.LSTM(units = neurons, activation = 'relu',recurrent_activation = 'sigmoid',
+        model.add(keras.layers.LSTM(units = self.neurons, activation = 'relu',recurrent_activation = 'sigmoid',
                           recurrent_dropout = 0,unroll = False, use_bias = True, return_sequences = True,
-                         input_shape=(x_shape, y_shape)))
+                         input_shape=(self.x_shape, self.y_shape)))
         # adicionar camada LSTM para usar o disposito de recorrência
-        model.add(keras.layers.LSTM(units = neurons, activation = 'relu'))
+        model.add(keras.layers.LSTM(units = self.neurons, activation = 'relu'))
         model.add(keras.layers.Dense(hidden_nodes, activation = 'tanh'))
         model.add(keras.layers.Dropout(dropout))
         model.add(keras.layers.Dense(1))
@@ -112,16 +112,15 @@ class Models:
         MODEL_ARCH = 'LSTM-B'
 
         #número de neurônios nas camadas ocultas
-        hidden_nodes = int(n_nodes*2/3)
+        hidden_nodes = int(self.neurons*2/3)
         dropout = 0.2
         # modelo de rede de acordo com a configuração
         model = keras.Sequential()
 
         # CUDNN LSTM implementation
-        model.add(keras.layers.LSTM(units = n_neurons, activation = 'tanh',recurrent_activation = 'sigmoid',
-                          recurrent_dropout = 0,unroll = False, use_bias = True,
-                          input_shape=(train_X.shape[1], train_X.shape[2])))
-        model.add(keras.layers.Dropout(dropout))
+        model.add(keras.layers.Bidirectional(keras.layers.LSTM(self.neurons, activation = 'relu'), 
+                                      input_shape=(self.x_shape, self.y_shape)))
+        model.add(keras.layers.Dropout(dropout)) # camada para evitar overfitting (20% dos pesos são zerados)
         model.add(keras.layers.Dense(hidden_nodes, activation = 'relu'))
         model.add(keras.layers.Dropout(dropout))
         model.add(keras.layers.Dense(1))
@@ -146,21 +145,63 @@ class Models:
         MODEL_ARCH = 'GRU'
 
         #número de neurônios nas camadas ocultas
-        hidden_nodes = int(n_nodes*2/3)
+        hidden_nodes = int(self.neurons*2/3)
         dropout = 0.2
         # modelo de rede de acordo com a configuração
         model = keras.Sequential()
 
         # CUDNN LSTM implementation
-        model.add(keras.layers.LSTM(units = n_neurons, activation = 'tanh',recurrent_activation = 'sigmoid',
-                          recurrent_dropout = 0,unroll = False, use_bias = True,
-                          input_shape=(train_X.shape[1], train_X.shape[2])))
-        model.add(keras.layers.Dropout(dropout))
-        model.add(keras.layers.Dense(hidden_nodes, activation = 'relu'))
+        model.add(keras.layers.Conv1D(filters=self.neurons, kernel_size=8, strides=4, padding="valid",
+             input_shape=(self.x_shape, self.y_shape)))
+        model.add(keras.layers.GRU(self.neurons, return_sequences=True))
+        model.add(keras.layers.Dropout(dropout)) # camada para evitar overfitting (20% dos pesos são zerados)
+        model.add(keras.layers.GRU(hidden_nodes))
         model.add(keras.layers.Dropout(dropout))
         model.add(keras.layers.Dense(1))
 
         return model
+
+    def cnn_lstm(self):
+        """
+        Função que constrói o modelo baseado em neurônios CNN e LSTM.
+
+
+        Returns
+        -------
+        model : keras.model
+            Modelo com arquitetura baseada em neurônios CNN e LSTM empilhados.
+
+        """
+        
+        global MODEL_ARCH
+        # nome da arquitetura modelo
+        MODEL_ARCH = 'CNN-LSTM'
+
+        #número de neurônios nas camadas ocultas
+        hidden_nodes = int(self.neurons*2/3)
+        dropout = 0.2
+        # modelo de rede de acordo com a configuração
+        model = keras.Sequential()
+        
+        
+        # Usando a implementação CuDNNLSTM - mais rápida
+        model.add(keras.layers.LSTM(self.neurons,activation = 'tanh',recurrent_activation = 'sigmoid',
+                       return_sequences=True,recurrent_dropout = 0,unroll = False, use_bias = True, 
+                       input_shape=(self.x_shape, self.y_shape)))
+        model.add(keras.layers.Dropout(dropout)) # camada para evitar overfitting 
+        model.add(keras.layers.Conv1D(filters=self.neurons, kernel_size=8, activation='tanh', 
+                         input_shape=(self.x_shape, self.y_shape)))
+        model.add(keras.layers.MaxPooling1D(pool_size=1))
+        model.add(keras.layers.Flatten())
+        model.add(keras.layers.Dropout(dropout)) # camada para evitar overfitting 
+        model.add(keras.layers.Dense(hidden_nodes, activation='relu'))
+        model.add(keras.layers.Dropout(dropout))
+        model.add(keras.layers.Dense(1))
+        
+        #print(model.summary())
+        
+        return model
+
 
     def set_x_shape(self,x_shape):
         """
