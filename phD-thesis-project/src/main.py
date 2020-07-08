@@ -73,12 +73,13 @@ def run_lstm(data):
     None.
 
     """
-         
-    config = config_model(n_steps = [24,36],n_train_steps = [24,36],n_batch = [16,32])
+    # [4, 36, 36, 5, 300, 300, 32]     
+    config = config_model(n_steps = [36],n_train_steps = [36],
+                          n_nodes=[300],n_epochs=[300],n_batch = [32])
 
     simulator = Simulator(data, config)
     simulator.set_model_arch('LSTM')
-    #best_res, best_par = simulator.run_simulation()
+    best_res, best_par = simulator.run_simulation()
     
     # Carrega o modelo que apresentou o melhor resultado na simulação
     best_model, best_res, n_inputs = simulator.load_best_model()
@@ -109,7 +110,9 @@ def run_lstm_bidirecccional(data):
     None.
 
     """
-    config = config_model(n_steps = [24,36],n_train_steps = [24,36],n_batch = [16,32])
+    # [4, 36, 36, 5, 300, 300, 12]
+    config = config_model(n_steps = [36],n_train_steps = [36],
+                          n_nodes=[300],n_epochs=[300],n_batch = [12])
 
     simulator = Simulator(data, config)
     simulator.set_model_arch('LSTM-B')
@@ -135,6 +138,7 @@ def run_lstm_bidirecccional(data):
     
     return
 
+   
 def run_lstm_stacked(data):
     """
     Função que executa a simulação com a arquitetura de rede LSTM empilhado.
@@ -144,11 +148,13 @@ def run_lstm_stacked(data):
     None.
 
     """
-    config = config_model(n_steps = [24,36],n_train_steps = [24,36],n_batch = [16,32])
+    #[4, 36, 36, 5, 100, 300, 12]
+    config = config_model(n_steps = [36],n_train_steps = [36],
+                          n_nodes=[100],n_epochs=[300],n_batch = [12])
 
     simulator = Simulator(data, config)
     simulator.set_model_arch('LSTM-S')
-    #best_res, best_par = simulator.run_simulation()
+    best_res, best_par = simulator.run_simulation()
     
     # Carrega o modelo que apresentou o melhor resultado na simulação
     best_model, best_res, n_inputs = simulator.load_best_model()
@@ -180,8 +186,9 @@ def run_gru(data):
     None.
 
     """
-    
-    config = config_model(n_steps = [24,36],n_train_steps = [24,36],n_batch = [16,32])
+    # [4, 36, 36, 5, 100, 150, 36]
+    config = config_model(n_steps = [36],n_train_steps = [36],
+                          n_nodes=[100],n_epochs=[150],n_batch = [36])
 
     simulator = Simulator(data, config)
     simulator.set_model_arch('GRU')
@@ -217,7 +224,9 @@ def run_cnnn_lstm(data):
     None.
 
     """
-    config = config_model(n_steps = [24,36],n_train_steps = [24,36],n_batch = [16,32])
+    #[4, 36, 36, 5, 300, 250, 12]
+    config = config_model(n_steps = [36],n_train_steps = [36],
+                          n_nodes=[300],n_epochs=[250],n_batch = [12])
 
     simulator = Simulator(data, config)
     simulator.set_model_arch('CNN-LSTM')
@@ -281,6 +290,93 @@ def plot_results(data, model_name):
     plt.savefig('{}/forecast-{}'.format(FIGS_FLD,model_name))
     plt.show()
 
+
+def artificial_forecast(data):
+    
+    n_artificial = 36
+    
+    data_obs = data.iloc[-n_artificial:,:]
+    
+    data_new = data.iloc[:-n_artificial, :]
+    
+    data_artificial = np.zeros((n_artificial,5), dtype='float')
+
+    data_artificial = pd.DataFrame(data_artificial, columns = data.columns)
+    data_artificial.index = data_obs.index
+    
+    data_new = pd.concat((data_new, data_artificial), axis = 0)
+    
+    data_new.iloc[-n_artificial:][['Inv']]  = data_obs[['Inv']]
+    
+    # [4, 36, 36, 5, 300, 300, 32]     
+    config = config_model(n_steps = [36],n_train_steps = [24],
+                          n_nodes=[300],n_epochs=[300],n_batch = [32])
+
+    simulator = Simulator(data_new, config)
+    simulator.set_model_arch('LSTM')
+    simulator.set_nrep(1)
+    
+    result_mean, perf_mean, cfg = simulator.eval_model(config[0], False )
+    
+    print(result_mean)    
+    # Carrega o modelo que apresentou o melhor resultado na simulação
+    #best_model, _, n_inputs = simulator.load_best_model()
+   
+   
+   
+    
+    #df_proj, pred_list = simulator.forecast(data_new, n_inputs, 24, best_model)
+    
+    #print(pred_list)
+
+    #model_name = 'Inv_art_{}'.format(simulator.get_model_arch())    
+
+    # Cria Data Frame a partir da melhor previsão dentro da amostra
+    #df_NN = pd.DataFrame(best_res, columns=[model_name])
+    #df_NN.index = data.index[-len(df_NN):]     
+  
+    
+    # Cria Data Frame com todos os resultados    
+    #df_proj = pd.concat([df_proj,df_NN], axis=1)
+    
+    #plot_results(df_proj, model_name) 
+    
+    
+    
+    
+# =============================================================================
+#      agro = pd.Series(np.full(-n_artificial,np.mean(df.iloc[-n_artificial:]['Agr'])))
+#      ind = pd.Series(np.full(n_before,np.mean(df.iloc[-n_artificial:]['Ind'])))
+#      inf = pd.Series(np.full(n_before,np.mean(df.iloc[-n_artificial:]['Inf'])))
+#      com = pd.Series(np.full(n_before,np.mean(df.iloc[-n_artificial:]['Com'])))
+# 
+# =============================================================================
+     # Make forecasts
+     #n_ahead = 24
+
+# #     agro = pd.Series(np.zeros(n_before))
+# #     ind = pd.Series(np.zeros(n_before))
+# #     inf = pd.Series(np.zeros(n_before))
+# #     com = pd.Series(np.zeros(n_before))
+# # =============================================================================
+#     inv = pd.Series(np.zeros(n_before))
+#     
+#     
+#      
+#     
+#     df_forecast= pd.concat([inv,agro, ind, inf, com], axis=1)
+#     #dates_forecast = pd.date_range(start='2020-01-01', periods=n_before, freq='M')
+#     dates_forecast = pd.date_range(start=df.index[-n_before], periods=n_before, freq='M')
+#     df_forecast.index = pd.DatetimeIndex(dates_forecast)
+#     df_forecast.columns = df.columns
+#     
+#     strip = len(df) - n_before
+#     # ,df.iloc[-n_ahead:],df_forecast
+#     df_forecast = pd.concat((df.iloc[:strip],df_forecast),axis=0)
+# =============================================================================
+
+
+
 #%% Função principal
 def main():
     """
@@ -318,10 +414,11 @@ def main():
         
     df = df[var]
     
+    artificial_forecast(df)
     
-    run_lstm(df)
-    #run_lstm_stacked(df)
+    #run_lstm(df)
     #run_lstm_bidirecccional(df)
+    #run_lstm_stacked(df)
     #run_gru(df)
     #run_cnnn_lstm(df)
     
@@ -342,3 +439,4 @@ def main():
     
 if __name__ == '__main__':
 	main()
+    

@@ -62,7 +62,6 @@ from tqdm import tqdm
 #%% Definições para o log do Tensorflow/Tensorboard
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '0'  # or any {'0', '1', '2'}
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
-TF_LOG = False
 
 #%% Definições das pastas para armazenar arquivos produzidos pela simulação
 MODELS_FLD = os.path.join('..','models')

@@ -26,8 +26,12 @@ tf.config.experimental.set_memory_growth(physical_devices[0], enable=True)
 # Load the TensorBoard notebook extension.
 get_ipython().run_line_magic('reload_ext', 'tensorboard')
 
+# variáveis gerais para controle das simulações
 MODEL_ARCH = 'LSTM'
-TENSOR_BOARD_LOG = False
+LEARNING_RATE = 1.0e-4
+PATIENCE = 30
+TF_LOG = False # ativa o callback do tensorboard para geração de logs
+
 
 #%% Classe Simulator
 class Simulator:
@@ -36,7 +40,7 @@ class Simulator:
     
     #%%Treino da RNA
     @tf.autograph.experimental.do_not_convert
-    def train_model(self, cfg):
+    def train_model(self, cfg, autoregressive):
         """
         Função para treinamento das redes neurais
 
@@ -69,32 +73,45 @@ class Simulator:
         scaler = MinMaxScaler(feature_range=(0, 1))
         scaled = scaler.fit_transform(values)
         # specify the number of lag quarters
-        # frame as supervised learning
-        reframed = self.series_to_supervised(scaled, n_steps, 1)
+        
+            
+        if autoregressive == False:
+            #### é necessário reescalar os valores de acordo com a nova forma dos dados
+                     
+            # O MODELO NÃO É AUTORREGRESSIVO 
+            train_X, train_y = train[1:6, :n_obs], train[0:1, -n_endog]
+            test_X, test_y = test[1:6, :n_obs], test[0:1, -n_endog]
+             
+            # reshape input to be 3D [samples, timesteps, features]
+            train_X = train_X.reshape((train_X.shape[0], n_steps, n_features))
+            test_X = test_X.reshape((test_X.shape[0], n_steps, n_features))
+                
+                       
+        else:
+            # O MODELO É AUTORREGRESSIVO 
+            # frame as supervised learning
+            reframed = self.series_to_supervised(scaled, n_steps, 1)
       
-        # split into train and test sets
-        values = reframed.values
+            # split into train and test sets
+            values = reframed.values
         
-        train = values[:n_train_steps, :]
-        test = values[n_train_steps:, :]
+            n_obs = n_steps * n_features
         
-        n_obs = n_steps * n_features
-        #n_obs = n_steps * n_endog    
-      
-        # O MODELO É AUTORREGRESSIVO (ALTERAR?)  
-        train_X, train_y = train[:, :n_obs], train[:, -n_features]
-        test_X, test_y = test[:, :n_obs], test[:, -n_features]
-         
-        # reshape input to be 3D [samples, timesteps, features]
-        train_X = train_X.reshape((train_X.shape[0], n_steps, n_features))
-        test_X = test_X.reshape((test_X.shape[0], n_steps, n_features))
-        
+            train = values[:n_train_steps, :]
+            test = values[n_train_steps:, :]
+            
+            train_X, train_y = train[:, :n_obs], train[:, -n_features]
+            test_X, test_y = test[:, :n_obs], test[:, -n_features]
+             
+            # reshape input to be 3D [samples, timesteps, features]
+            train_X = train_X.reshape((train_X.shape[0], n_steps, n_features))
+            test_X = test_X.reshape((test_X.shape[0], n_steps, n_features))
+            
         # constrói e configura os parâmetros da rede neural
         model = Models()
-        model.set_x_shape(test_X.shape[1])
-        model.set_y_shape(test_X.shape[2])
         model.set_neurons(n_nodes)
-        
+        model.set_x_shape(test_X.shape[1])
+        model.set_y_shape(test_X.shape[2])        
        
         if MODEL_ARCH == 'LSTM':
             model = model.lstm()
@@ -107,16 +124,13 @@ class Simulator:
         elif MODEL_ARCH == 'CNN-LSTM':
             model = model.cnn_lstm()
         else:
-            
             print('**'*10)
             print("Erro! Modelo não identificado.")
             return
-                    
-                 
-        
+       
         batch_size=n_batch
          
-        learning_rate=1.0e-3
+        learning_rate=LEARNING_RATE
         
         callbacks = []
         
@@ -126,8 +140,8 @@ class Simulator:
         
         
              
-        patience_callback = tf.keras.callbacks.EarlyStopping(monitor='loss', 
-                                                             patience=20)
+        patience_callback = tf.keras.callbacks.EarlyStopping(monitor='val_binary_crossentropy', 
+                                                             patience=PATIENCE)
         
         
         callbacks.append(patience_callback)
@@ -152,7 +166,7 @@ class Simulator:
     
     #%% Avaliação do Modelo
     @tf.autograph.experimental.do_not_convert
-    def eval_model(self, cfg):
+    def eval_model(self, cfg, autoregressive = True):
         """
         Função para avaliação das redes neurais com previsão dentro da amostra.
 
@@ -206,7 +220,7 @@ class Simulator:
         for i in tqdm(range(self.n_rep)):
           
            
-          trainned_model, testx, testy, scaler = self.train_model(cfg)
+          trainned_model, testx, testy, scaler = self.train_model(cfg, autoregressive)
           
           
           
@@ -250,10 +264,12 @@ class Simulator:
         for i in range(resultado.shape[1]):
           result_mean[i] = np.mean(resultado[:,i])
         
-        trainned_model.save("{}/model-{}-{}-{}.h5".format(MODELS_FLD,MODEL_ARCH,series_par,model_par))  
-        #,datetime.now().strftime("%Y%m%d-%H%M%S")
-        #model.summary()
-          
+        if autoregressive == False:
+            trainned_model.save("{}/model-{}-{}-{}-nar.h5".format(MODELS_FLD,MODEL_ARCH,series_par,model_par))  
+        else:
+            trainned_model.save("{}/model-{}-{}-{}.h5".format(MODELS_FLD,MODEL_ARCH,series_par,model_par))  
+        
+        
         return result_mean, perf_mean, cfg
       
     
@@ -685,8 +701,12 @@ class Simulator:
         -------
         None.
 
-        """        
+        """
         self.config = config
+        
+        
+        config = np.array(config).reshape(len(config[0]),len(config))    
+        
         self.n_endog = config[0]
         self.n_steps= config[1] 
         self.n_train_steps = config[2] 
@@ -694,6 +714,7 @@ class Simulator:
         self.n_nodes = config[4] 
         self.n_epochs = config[5] 
         self.n_batch = config[6]
+
         self.data = data
         self.n_rep = 10
         logging.info('## Redes Neurais construídas ##')    
