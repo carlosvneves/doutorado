@@ -40,7 +40,7 @@ class Simulator:
     
     #%%Treino da RNA
     @tf.autograph.experimental.do_not_convert
-    def train_model(self, cfg, autoregressive):
+    def train_model(self, cfg):
         """
         Função para treinamento das redes neurais
 
@@ -73,39 +73,26 @@ class Simulator:
         scaler = MinMaxScaler(feature_range=(0, 1))
         scaled = scaler.fit_transform(values)
         # specify the number of lag quarters
+    
+        # O MODELO É AUTORREGRESSIVO 
+        # frame as supervised learning
+        reframed = self.series_to_supervised(scaled, n_steps, 1)
+  
+        # split into train and test sets
+        values = reframed.values
+    
+        n_obs = n_steps * n_features
+    
+        train = values[:n_train_steps, :]
+        test = values[n_train_steps:, :]
         
-            
-        if autoregressive == False:
-            #### é necessário reescalar os valores de acordo com a nova forma dos dados
-                     
-            # O MODELO NÃO É AUTORREGRESSIVO 
-            train_X, train_y = train[1:6, :n_obs], train[0:1, -n_endog]
-            test_X, test_y = test[1:6, :n_obs], test[0:1, -n_endog]
-             
-            # reshape input to be 3D [samples, timesteps, features]
-            train_X = train_X.reshape((train_X.shape[0], n_steps, n_features))
-            test_X = test_X.reshape((test_X.shape[0], n_steps, n_features))
-                
-                       
-        else:
-            # O MODELO É AUTORREGRESSIVO 
-            # frame as supervised learning
-            reframed = self.series_to_supervised(scaled, n_steps, 1)
-      
-            # split into train and test sets
-            values = reframed.values
-        
-            n_obs = n_steps * n_features
-        
-            train = values[:n_train_steps, :]
-            test = values[n_train_steps:, :]
-            
-            train_X, train_y = train[:, :n_obs], train[:, -n_features]
-            test_X, test_y = test[:, :n_obs], test[:, -n_features]
-             
-            # reshape input to be 3D [samples, timesteps, features]
-            train_X = train_X.reshape((train_X.shape[0], n_steps, n_features))
-            test_X = test_X.reshape((test_X.shape[0], n_steps, n_features))
+        train_X, train_y = train[:, :n_obs], train[:, -n_features]
+        test_X, test_y = test[:, :n_obs], test[:, -n_features]
+         
+        # reshape input to be 3D [samples, timesteps, features]
+        train_X = train_X.reshape((train_X.shape[0], n_steps, n_features))
+        test_X = test_X.reshape((test_X.shape[0], n_steps, n_features))            
+
             
         # constrói e configura os parâmetros da rede neural
         model = Models()
@@ -166,7 +153,7 @@ class Simulator:
     
     #%% Avaliação do Modelo
     @tf.autograph.experimental.do_not_convert
-    def eval_model(self, cfg, autoregressive = True):
+    def eval_model(self, cfg):
         """
         Função para avaliação das redes neurais com previsão dentro da amostra.
 
@@ -220,7 +207,7 @@ class Simulator:
         for i in tqdm(range(self.n_rep)):
           
            
-          trainned_model, testx, testy, scaler = self.train_model(cfg, autoregressive)
+          trainned_model, testx, testy, scaler = self.train_model(cfg)
           
           
           
@@ -264,10 +251,7 @@ class Simulator:
         for i in range(resultado.shape[1]):
           result_mean[i] = np.mean(resultado[:,i])
         
-        if autoregressive == False:
-            trainned_model.save("{}/model-{}-{}-{}-nar.h5".format(MODELS_FLD,MODEL_ARCH,series_par,model_par))  
-        else:
-            trainned_model.save("{}/model-{}-{}-{}.h5".format(MODELS_FLD,MODEL_ARCH,series_par,model_par))  
+        trainned_model.save("{}/model-{}-{}-{}.h5".format(MODELS_FLD,MODEL_ARCH,series_par,model_par))  
         
         
         return result_mean, perf_mean, cfg

@@ -414,9 +414,8 @@ def main():
         
     df = df[var]
     
-    artificial_forecast(df)
-    
-    #run_lstm(df)
+       
+    run_lstm(df)
     #run_lstm_bidirecccional(df)
     #run_lstm_stacked(df)
     #run_gru(df)
