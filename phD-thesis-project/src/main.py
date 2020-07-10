@@ -214,6 +214,7 @@ def run_gru(data):
     plot_results(df_proj, model_name)    
 
     return
+
 @tf.autograph.experimental.do_not_convert
 def run_cnnn_lstm(data):
     """
@@ -290,7 +291,24 @@ def plot_results(data, model_name):
     plt.savefig('{}/forecast-{}'.format(FIGS_FLD,model_name))
     plt.show()
 
+def run_neuralVAR(data):
+    config = config_model(n_steps = [36],n_train_steps = [36],
+                          n_nodes=[300],n_epochs=[250],n_batch = [12])
 
+    simulator = Simulator(data, config)
+    simulator.neural_VAR(max_var_order=6)
+    
+ 
+def run_neuralARIMA(data):
+    
+    config = config_model(n_steps = [36],n_train_steps = [36],
+                          n_nodes=[300],n_epochs=[250],n_batch = [12])
+
+    simulator = Simulator(data, config)
+    simulator.neural_ARIMA()
+    
+ 
+    
 def artificial_forecast(data):
     
     n_artificial = 36
@@ -415,13 +433,14 @@ def main():
     df = df[var]
     
        
-    run_lstm(df)
+    #run_lstm(df)
     #run_lstm_bidirecccional(df)
     #run_lstm_stacked(df)
     #run_gru(df)
     #run_cnnn_lstm(df)
     
-    
+    #run_neuralVAR(df)
+    run_neuralARIMA(df)
     
     
     print("**"*25)

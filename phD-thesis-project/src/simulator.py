@@ -13,6 +13,7 @@ Title:Professor of Department of Economics - UnB
 """
 from lib import * 
 from models import *
+from ts_models import *
 
 
 #%% Parâmetros para utilização da GPU
@@ -110,6 +111,8 @@ class Simulator:
              model = model.gru()
         elif MODEL_ARCH == 'CNN-LSTM':
             model = model.cnn_lstm()
+        elif MODEL_ARCH == 'VAR-LSTM':
+            model = model.var_lstm()
         else:
             print('**'*10)
             print("Erro! Modelo não identificado.")
@@ -667,7 +670,479 @@ class Simulator:
          
         return best_model, best_res, n_inputs
 
-   
+
+    
+    def neural_VAR(self, max_var_order, split = 0.75):
+        """
+        
+
+        Parameters
+        ----------
+        max_var_order : TYPE
+            DESCRIPTION.
+        split : TYPE, optional
+            DESCRIPTION. The default is 0.75.
+
+        Returns
+        -------
+        None.
+
+        """
+        
+        
+        data=self.data
+        
+        # usa o pacote pmdarima para determinar a ordem de diferenciação
+        # da variável endógena
+        period_adf = ndiffs(data['Inv'], test='adf')
+        period_kpss = ndiffs(data['Inv'], test='adf')
+        
+        if period_adf > period_kpss:
+            period = period_adf
+        else:
+            period = period_kpss
+        
+      
+        
+        df_external = data[['Agr','Ind','Inf','Com']]
+        
+        ### modelos de séries temporais
+        ts_model = TS_Models()
+        
+        ### modelos de redes neurais
+        nn_model = Models( )
+        nn_model.set_neurons(300)
+        
+        ### SPLIT TRAIN TEST ###
+        
+        train_date = data.index[:int(len(data)*split)]
+        train = data[:int(len(data)*split)].copy()
+        
+        test_date = data.index[int(len(data)*split):]
+        test = data[int(len(data)*split):].copy()
+        
+        
+        ### PLOT ORIGINAL SERIES ###
+
+        for col in data.columns:
+            ts_model.plot_series(train_date, train, test_date, test, col)
+        
+        
+        ### PLOT AUTOCORRELATION ###
+
+        for col in data.columns:
+            ts_model.plot_autocor(col, train)
+        
+        ### OPERATE DIFFERENTIATION ###
+
+        df_diff = data.diff(period).dropna()
+        df_external = df_external.iloc[period:].copy()
+        
+        ### realiza o teste de raiz unitária ###
+        #ts_model.adf_test(df_diff['Inv'])        
+        #ts_model.adf_test(df_diff['Agr'])
+        #ts_model.adf_test(df_diff['Ind'])
+        #ts_model.adf_test(df_diff['Inf'])
+        #ts_model.adf_test(df_diff['Com'])
+        
+        
+        
+        ### SPLIT DIFFERENTIAL DATA IN TRAIN AND TEST ###
+
+        train_diff = df_diff.iloc[:len(train)-period,:].copy()
+        test_diff = df_diff.iloc[len(train)-period:,:].copy()
+        
+        train_init = data.iloc[:len(train)-period,:].copy()
+        test_init = data.iloc[len(train)-period:-period,:].copy()
+        
+        train_ext = df_external.iloc[:len(train)-period,:].copy()
+        test_ext = df_external.iloc[len(train)-period:,:].copy()
+ 
+                
+        ## PLOT DIFFERENTIAL SERIES ###
+
+        for col in data.columns:
+            ts_model.plot_autocor(col, train_diff)
+        
+        ### FIND BEST VAR ORDER ###
+        best_order, best_aic = ts_model.VAR_bestorder(df_diff, max_var_order)
+        
+        ### modelo VAR ###
+        var, var_result = ts_model.VAR(train_diff, best_order)
+        
+        ### RETRIVE PREDICTION AND OBTAIN THE CORRESPONDING ACTUAL VALUES ###
+
+        date = train_date[-1]
+        forward = test.shape[0]
+        date_range = pd.date_range(date, periods=forward+1, freq='M', closed='right')
+        
+        final_pred = ts_model.retrive_prediction(var_result, period, df_diff.loc[:date], data.loc[:date], steps = forward)
+        final_true = data.loc[date_range]
+         
+        ### PLOT ACTUAL vs PREDICTION ###
+
+        for i,col in enumerate(data.columns):
+        
+            plt.figure(figsize=(16,4))
+            plt.plot(date_range, final_pred[:,i], c='green', label='prediction var')
+            plt.plot(date_range, final_true[col].values, c='orange', label='true')
+            plt.ylabel(col); plt.legend()
+            plt.show()
+        
+        ### GET TRAIN VALIDATION AND TEST DATA FOR NEURAL NETWORK ###
+
+        X = var_result.fittedvalues
+        
+        y_train = train.iloc[period+best_order:].values
+        y_train_var = X + train_init.iloc[best_order:].values
+        X_train = np.concatenate([train_diff.iloc[best_order:].values, train_ext.iloc[best_order:].values], axis=1)
+        X_train_var = np.concatenate([X, train_ext.iloc[best_order:].values], axis=1)
+        
+        y_val = y_train[int(len(X)*split):]
+        y_val_var = y_train_var[int(len(X)*split):]
+        X_val = X_train[int(len(X)*split):]
+        X_val_var = X_train_var[int(len(X)*split):]
+        
+        y_train = y_train[:int(len(X)*split)]
+        y_train_var = y_train_var[:int(len(X)*split)]
+        X_train = X_train[:int(len(X)*split)]
+        X_train_var = X_train_var[:int(len(X)*split)]
+        
+        y_test = test.values
+        X_test = np.concatenate([test_diff.values, test_ext.values], axis=1)
+        
+        ### SCALE DATA ###
+
+        scaler_y = StandardScaler()
+        scaler = StandardScaler()
+        
+        y_train = scaler_y.fit_transform(y_train)
+        y_train_var = scaler_y.transform(y_train_var)
+        y_val = scaler_y.transform(y_val)
+        y_val_var = scaler_y.transform(y_val_var)
+        y_test = scaler_y.transform(y_test)
+        
+        X_train = scaler.fit_transform(X_train)
+        X_train_var = scaler.transform(X_train_var)
+        X_val = scaler.transform(X_val)
+        X_val_var = scaler.transform(X_val_var)
+        X_test = scaler.transform(X_test)
+        
+        ### BUILD DATA GENERATOR ###
+        seq_length = int(best_order * 1.5)
+        batch = int(seq_length * 1.5)
+        generator_train = TimeseriesGenerator(X_train, y_train, length=seq_length, batch_size=batch)
+        generator_train_var = TimeseriesGenerator(X_train_var, y_train_var, length=seq_length, batch_size=batch)
+        generator_val = TimeseriesGenerator(X_val, y_val, length=seq_length, batch_size=batch)
+        generator_val_var = TimeseriesGenerator(X_val_var, y_val_var, length=seq_length, batch_size=batch)
+        generator_test = TimeseriesGenerator(X_test, y_test, length=seq_length, batch_size=batch)
+        
+        
+        ### FIT NEURAL NETWORK WITH VAR FITTED VALUES AND RAW DATA ###
+
+        tf.random.set_seed(33)
+        os.environ['PYTHONHASHSEED'] = str(33)
+        np.random.seed(33)
+        np.random.seed(33)
+        
+        session_conf = tf.compat.v1.ConfigProto(
+            intra_op_parallelism_threads=1, 
+            inter_op_parallelism_threads=1
+        )
+        sess = tf.compat.v1.Session(
+            graph=tf.compat.v1.get_default_graph(), 
+            config=session_conf
+        )
+        tf.compat.v1.keras.backend.set_session(sess)
+        
+        
+        es = tf.keras.callbacks.EarlyStopping(patience=30, verbose=1, min_delta=0.001, monitor='val_loss', mode='auto', restore_best_weights=True)
+        
+        print('--------', 'train model with VAR fitted values', '--------')
+        model_var =  nn_model.var_lstm(test.shape[0])   
+        model_var.fit_generator(generator_train_var, steps_per_epoch= len(generator_train_var),
+                                epochs=300, validation_data=generator_val_var, validation_steps = len(generator_val_var), 
+                                callbacks=[es], verbose = 1)
+        
+        
+        print('--------', 'train model with raw data', '--------')
+        model_var.fit_generator(generator_train, steps_per_epoch= len(generator_train),
+                                epochs=300, validation_data=generator_val, validation_steps = len(generator_val), 
+                                callbacks=[es], verbose = 1)
+        
+        ### OBTAIN PREDICTIONS AND RETRIVE ORIGINAL DATA ###
+
+        true = scaler_y.inverse_transform(y_test[seq_length:])
+        
+        pred = model_var.predict_generator(generator_test)
+        pred = scaler_y.inverse_transform(pred)
+        
+        
+        ### FIT NEURAL NETWORK WITH ONLY ORIGINAL DATA ###
+
+        tf.random.set_seed(33)
+        os.environ['PYTHONHASHSEED'] = str(33)
+        np.random.seed(33)
+        np.random.seed(33)
+        
+        session_conf = tf.compat.v1.ConfigProto(
+            intra_op_parallelism_threads=1, 
+            inter_op_parallelism_threads=1
+        )
+        sess = tf.compat.v1.Session(
+            graph=tf.compat.v1.get_default_graph(), 
+            config=session_conf
+        )
+        tf.compat.v1.keras.backend.set_session(sess)
+        
+        
+        es = keras.callbacks.EarlyStopping(patience=30, verbose=1, min_delta=0.001, monitor='val_loss', mode='auto', restore_best_weights=True)
+        
+        simple_model = nn_model.var_lstm(test.shape[0]) 
+        simple_model.fit_generator(generator_train, steps_per_epoch= len(generator_train),
+                                    epochs=300, validation_data=generator_val, validation_steps = len(generator_val), 
+                                    callbacks=[es], verbose = 1)
+        
+        os.chdir('../')### OBTAIN PREDICTIONS ###
+
+        pred_simple = simple_model.predict_generator(generator_test)
+        pred_simple = scaler_y.inverse_transform(pred_simple)
+        
+        diz_mae_lstm, diz_mae_var_lstm = compute_mae(data, true, pred, pred_simple)
+        
+        diz_mse_lstm, diz_mse_var_lstm = compute_mse(data, true, pred, pred_simple)
+        
+        diz_ac_lstm, diz_ac_var_lstm = compute_autocor(data, true, pred, pred_simple)
+               
+        return
+    
+    
+    
+    def neural_ARIMA(self, split = 0.75):
+        
+        data=self.data['Inv']
+        
+        data = pd.DataFrame(data)
+        # usa o pacote pmdarima para determinar a ordem de diferenciação
+        # da variável endógena
+        period_adf = ndiffs(data, test='adf')
+        period_kpss = ndiffs(data, test='adf')
+        
+        if period_adf > period_kpss:
+            period = period_adf
+        else:
+            period = period_kpss
+        
+      
+        
+        #df_external = data[['Agr','Ind','Inf','Com']]
+        
+        ### modelos de séries temporais
+        ts_model = TS_Models()
+        
+        ### modelos de redes neurais
+        nn_model = Models()
+        nn_model.set_neurons(300)
+        
+        ### SPLIT TRAIN TEST ###
+        
+        train_date = data.index[:int(len(data)*split)]
+        train = data[:int(len(data)*split)].copy()
+        
+        test_date = data.index[int(len(data)*split):]
+        test = data[int(len(data)*split):].copy()
+        
+        train= pd.DataFrame(train)
+        test = pd.DataFrame(test)
+        
+        ### PLOT ORIGINAL SERIES ###
+
+        ts_model.plot_series(train_date, train, test_date, test, 'Inv')
+        
+        
+        ### PLOT AUTOCORRELATION ###
+
+        
+        ts_model.plot_autocor('Inv', train)
+        
+        ### OPERATE DIFFERENTIATION ###
+
+        df_diff = data.diff(period).dropna()
+        #df_external = df_external.iloc[period:].copy()
+        
+                
+        ### SPLIT DIFFERENTIAL DATA IN TRAIN AND TEST ###
+
+        train_diff = df_diff.iloc[:len(train)-period,:].copy()
+        test_diff = df_diff.iloc[len(train)-period:,:].copy()
+        
+        train_init = data.iloc[:len(train)-period,:].copy()
+        test_init = data.iloc[len(train)-period:-period,:].copy()
+        
+        #train_ext = df_external.iloc[:len(train)-period,:].copy()
+        #test_ext = df_external.iloc[len(train)-period:,:].copy()
+ 
+                
+        ## PLOT DIFFERENTIAL SERIES ###
+
+        
+        ts_model.plot_autocor('Inv', train_diff)
+        
+        ### FIND BEST ARIMA ###
+        arima_result = ts_model.ARIMA(data)
+        
+        ### RETRIVE PREDICTION AND OBTAIN THE CORRESPONDING ACTUAL VALUES ###
+
+        date = train_date[-1]
+        forward = test.shape[0]
+        date_range = pd.date_range(date, periods=forward+1, freq='M', closed='right')
+        
+        final_pred = ts_model.retrive_ARIMA_prediction(arima_result, period, df_diff.loc[:date], data.loc[:date], steps = forward)
+        final_true = data.loc[date_range]
+         
+        ### PLOT ACTUAL vs PREDICTION ###
+
+        
+        
+        plt.figure(figsize=(16,4))
+        plt.plot(date_range, final_pred[:,0], c='green', label='prediction var')
+        plt.plot(date_range, final_true['Inv'].values, c='orange', label='true')
+        plt.ylabel('Inv'); plt.legend()
+        plt.show()
+    
+        ### GET TRAIN VALIDATION AND TEST DATA FOR NEURAL NETWORK ###
+
+# =============================================================================
+#         X = var_result.fittedvalues
+#         
+#         y_train = train.iloc[period+best_order:].values
+#         y_train_var = X + train_init.iloc[best_order:].values
+#         X_train = np.concatenate([train_diff.iloc[best_order:].values, train_ext.iloc[best_order:].values], axis=1)
+#         X_train_var = np.concatenate([X, train_ext.iloc[best_order:].values], axis=1)
+#         
+#         y_val = y_train[int(len(X)*split):]
+#         y_val_var = y_train_var[int(len(X)*split):]
+#         X_val = X_train[int(len(X)*split):]
+#         X_val_var = X_train_var[int(len(X)*split):]
+#         
+#         y_train = y_train[:int(len(X)*split)]
+#         y_train_var = y_train_var[:int(len(X)*split)]
+#         X_train = X_train[:int(len(X)*split)]
+#         X_train_var = X_train_var[:int(len(X)*split)]
+#         
+#         y_test = test.values
+#         X_test = np.concatenate([test_diff.values, test_ext.values], axis=1)
+#         
+#         ### SCALE DATA ###
+# 
+#         scaler_y = StandardScaler()
+#         scaler = StandardScaler()
+#         
+#         y_train = scaler_y.fit_transform(y_train)
+#         y_train_var = scaler_y.transform(y_train_var)
+#         y_val = scaler_y.transform(y_val)
+#         y_val_var = scaler_y.transform(y_val_var)
+#         y_test = scaler_y.transform(y_test)
+#         
+#         X_train = scaler.fit_transform(X_train)
+#         X_train_var = scaler.transform(X_train_var)
+#         X_val = scaler.transform(X_val)
+#         X_val_var = scaler.transform(X_val_var)
+#         X_test = scaler.transform(X_test)
+#         
+#         ### BUILD DATA GENERATOR ###
+#         seq_length = int(best_order * 1.5)
+#         batch = int(seq_length * 1.5)
+#         generator_train = TimeseriesGenerator(X_train, y_train, length=seq_length, batch_size=batch)
+#         generator_train_var = TimeseriesGenerator(X_train_var, y_train_var, length=seq_length, batch_size=batch)
+#         generator_val = TimeseriesGenerator(X_val, y_val, length=seq_length, batch_size=batch)
+#         generator_val_var = TimeseriesGenerator(X_val_var, y_val_var, length=seq_length, batch_size=batch)
+#         generator_test = TimeseriesGenerator(X_test, y_test, length=seq_length, batch_size=batch)
+#         
+#         
+#         ### FIT NEURAL NETWORK WITH VAR FITTED VALUES AND RAW DATA ###
+# 
+#         tf.random.set_seed(33)
+#         os.environ['PYTHONHASHSEED'] = str(33)
+#         np.random.seed(33)
+#         np.random.seed(33)
+#         
+#         session_conf = tf.compat.v1.ConfigProto(
+#             intra_op_parallelism_threads=1, 
+#             inter_op_parallelism_threads=1
+#         )
+#         sess = tf.compat.v1.Session(
+#             graph=tf.compat.v1.get_default_graph(), 
+#             config=session_conf
+#         )
+#         tf.compat.v1.keras.backend.set_session(sess)
+#         
+#         
+#         es = tf.keras.callbacks.EarlyStopping(patience=30, verbose=1, min_delta=0.001, monitor='val_loss', mode='auto', restore_best_weights=True)
+#         
+#         print('--------', 'train model with VAR fitted values', '--------')
+#         model_var =  nn_model.var_lstm(test.shape[0])   
+#         model_var.fit_generator(generator_train_var, steps_per_epoch= len(generator_train_var),
+#                                 epochs=300, validation_data=generator_val_var, validation_steps = len(generator_val_var), 
+#                                 callbacks=[es], verbose = 1)
+#         
+#         
+#         print('--------', 'train model with raw data', '--------')
+#         model_var.fit_generator(generator_train, steps_per_epoch= len(generator_train),
+#                                 epochs=300, validation_data=generator_val, validation_steps = len(generator_val), 
+#                                 callbacks=[es], verbose = 1)
+#         
+#         ### OBTAIN PREDICTIONS AND RETRIVE ORIGINAL DATA ###
+# 
+#         true = scaler_y.inverse_transform(y_test[seq_length:])
+#         
+#         pred = model_var.predict_generator(generator_test)
+#         pred = scaler_y.inverse_transform(pred)
+#         
+#         
+#         ### FIT NEURAL NETWORK WITH ONLY ORIGINAL DATA ###
+# 
+#         tf.random.set_seed(33)
+#         os.environ['PYTHONHASHSEED'] = str(33)
+#         np.random.seed(33)
+#         np.random.seed(33)
+#         
+#         session_conf = tf.compat.v1.ConfigProto(
+#             intra_op_parallelism_threads=1, 
+#             inter_op_parallelism_threads=1
+#         )
+#         sess = tf.compat.v1.Session(
+#             graph=tf.compat.v1.get_default_graph(), 
+#             config=session_conf
+#         )
+#         tf.compat.v1.keras.backend.set_session(sess)
+#         
+#         
+#         es = keras.callbacks.EarlyStopping(patience=30, verbose=1, min_delta=0.001, monitor='val_loss', mode='auto', restore_best_weights=True)
+#         
+#         simple_model = nn_model.var_lstm(test.shape[0]) 
+#         simple_model.fit_generator(generator_train, steps_per_epoch= len(generator_train),
+#                                     epochs=300, validation_data=generator_val, validation_steps = len(generator_val), 
+#                                     callbacks=[es], verbose = 1)
+#         
+#         os.chdir('../')### OBTAIN PREDICTIONS ###
+# 
+#         pred_simple = simple_model.predict_generator(generator_test)
+#         pred_simple = scaler_y.inverse_transform(pred_simple)
+#         
+#         diz_mae_lstm, diz_mae_var_lstm = compute_mae(data, true, pred, pred_simple)
+#         
+#         diz_mse_lstm, diz_mse_var_lstm = compute_mse(data, true, pred, pred_simple)
+#         
+#         diz_ac_lstm, diz_ac_var_lstm = compute_autocor(data, true, pred, pred_simple)
+# =============================================================================
+        
+        
+        return
+        
+    
+    
+    
     #%% Class constructor
     def __init__(self, data, config):
         """

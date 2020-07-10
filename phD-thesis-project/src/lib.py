@@ -14,6 +14,8 @@ tf.keras.backend.clear_session()
 from keras.layers.merge import concatenate
 from tensorflow import keras
 from tensorflow.python.keras.callbacks import TensorBoard
+from tensorflow.keras.preprocessing.sequence import TimeseriesGenerator
+
 
 # bibliotecas matemáticas
 from sklearn.metrics import mean_squared_error
@@ -25,6 +27,16 @@ from pandas import DataFrame
 from pandas import concat
 from sklearn.preprocessing import MinMaxScaler
 
+# bibliotecas para os modelos de séries temporais
+from statsmodels.tsa.stattools import adfuller
+from scipy.stats import pearsonr
+from sklearn.metrics import mean_absolute_error
+from sklearn.metrics import mean_squared_error
+from sklearn.preprocessing import StandardScaler
+from statsmodels.tsa.vector_ar.var_model import VAR
+from pmdarima.arima.utils import ndiffs
+import pmdarima as pm
+
 
 # bilbiotecas de utilidades do sistema
 import sys
@@ -34,6 +46,7 @@ from datetime import datetime
 import time
 import logging
 from IPython import get_ipython
+
 
 # As novas versões do Pandas e Matplotlib trazem diversas mensagens de aviso ao desenvolvedor. Vamos desativar isso.
 # bibliotecas para visualização dos dados
@@ -245,3 +258,85 @@ def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, 
     # Print New Line on Complete
     if iteration == total: 
         print()
+
+### autocorrelation prediction
+def autocor_pred(real, pred, lag=1):
+    return pearsonr(real[:-lag], pred[lag:])[0]
+
+### COMPUTE METRICS ON TEST DATA ###
+def compute_mae(data, true, pred, pred_simple):
+    diz_error_lstm = {}
+    diz_error_var_lstm = {}
+    
+    
+    for i,col in enumerate(data.columns):
+        
+        error = mean_absolute_error(true[:,i], pred_simple[:,i])
+        diz_error_lstm[col] = error
+        
+        error = mean_absolute_error(true[:,i], pred[:,i])
+        diz_error_var_lstm[col] = error
+        
+    plt.figure(figsize=(14,5))
+    plt.bar(np.arange(len(diz_error_lstm))-0.15, diz_error_lstm.values(), alpha=0.5, width=0.3, label='lstm')
+    plt.bar(np.arange(len(diz_error_var_lstm))+0.15, diz_error_var_lstm.values(), alpha=0.5, width=0.3, label='var_lstm')
+    plt.xticks(range(len(diz_error_lstm)), diz_error_lstm.keys())
+    plt.ylabel('MAE'); plt.legend()
+    np.set_printoptions(False)
+    plt.show()
+        
+    return  diz_error_lstm, diz_error_var_lstm
+
+## COMPUTE METRICS ON TEST DATA ###
+def compute_mse(data, true, pred, pred_simple):
+    diz_error_lstm = {}
+    diz_error_var_lstm = {}
+    
+    
+    for i,col in enumerate(data.columns):
+        
+        error = mean_squared_error(true[:,i], pred_simple[:,i])
+        diz_error_lstm[col] = error
+        
+        error = mean_squared_error(true[:,i], pred[:,i])
+        diz_error_var_lstm[col] = error
+               
+    plt.figure(figsize=(14,5))
+    plt.bar(np.arange(len(diz_error_lstm))-0.15, diz_error_lstm.values(), alpha=0.5, width=0.3, label='lstm')
+    plt.bar(np.arange(len(diz_error_var_lstm))+0.15, diz_error_var_lstm.values(), alpha=0.5, width=0.3, label='var_lstm')
+    plt.xticks(range(len(diz_error_lstm)), diz_error_lstm.keys())
+    plt.ylabel('MSE'); plt.legend()
+    np.set_printoptions(False)
+    plt.show()
+    
+    return  diz_error_lstm, diz_error_var_lstm
+
+def compute_autocor(data, true, pred, pred_simple):
+    diz_ac_lstm = {}
+    diz_ac_var_lstm = {}
+    
+    
+    for i,col in enumerate(data.columns):
+        
+        ac = autocor_pred(true[:,i], pred_simple[:,i])
+        diz_ac_lstm[col] = ac
+        
+        ac = autocor_pred(true[:,i], pred[:,i])
+        diz_ac_var_lstm[col] = ac
+    
+        
+    plt.figure(figsize=(14,5))
+    plt.bar(np.arange(len(diz_ac_lstm))-0.15, diz_ac_lstm.values(), alpha=0.5, width=0.3, label='lstm')
+    plt.bar(np.arange(len(diz_ac_var_lstm))+0.15, diz_ac_var_lstm.values(), alpha=0.5, width=0.3, label='var_lstm')
+    plt.xticks(range(len(diz_ac_lstm)), diz_ac_lstm.keys())
+    plt.ylabel('correlation lag1'); plt.legend()
+    np.set_printoptions(False)   
+    plt.show()
+    
+    return diz_ac_lstm, diz_ac_var_lstm
+
+
+    
+
+    
+    

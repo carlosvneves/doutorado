@@ -202,6 +202,55 @@ class Models:
         
         return model
 
+    
+
+    def var_lstm(self, x_shape, seq_length = 36):
+        """
+        
+
+        Parameters
+        ----------
+        x_shape : TYPE
+            DESCRIPTION.
+        seq_length : TYPE, optional
+            DESCRIPTION. The default is 36.
+
+        Returns
+        -------
+        model : TYPE
+            DESCRIPTION.
+
+        """
+    
+        global MODEL_ARCH
+
+        # nome da arquitetura modelo
+        MODEL_ARCH = 'VAR-NN'
+
+        #número de neurônios nas camadas ocultas
+        hidden_nodes = int(self.neurons*2/3)
+        dropout = 0.2
+    
+    
+    
+        opt = keras.optimizers.RMSprop(lr=1e-4)
+        
+        inp = keras.layers.Input(shape=(seq_length, x_shape))
+        
+        x = keras.layers.LSTM(units = self.neurons, activation = 'tanh',
+                             recurrent_activation = 'sigmoid',
+                   recurrent_dropout = 0,unroll = False,
+                   use_bias = True)(inp)
+        x = keras.layers.Dropout(dropout)(x)
+        x = keras.layers.Dense(hidden_nodes, activation='relu')(x)
+        x = keras.layers.Dropout(dropout)(x)
+        
+        out = keras.layers.Dense(5)(x)
+        
+        model = keras.models.Model(inp, out)
+        model.compile(optimizer=opt, loss='mse')
+    
+        return model
 
     def set_x_shape(self,x_shape):
         """
