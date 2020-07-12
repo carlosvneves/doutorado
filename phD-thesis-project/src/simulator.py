@@ -32,7 +32,7 @@ MODEL_ARCH = 'LSTM'
 LEARNING_RATE = 1.0e-4
 PATIENCE = 30
 TF_LOG = False # ativa o callback do tensorboard para geração de logs
-
+WRT_MODEL = True # grava dados dos modelos em arquivo
 
 #%% Classe Simulator
 class Simulator:
@@ -254,7 +254,8 @@ class Simulator:
         for i in range(resultado.shape[1]):
           result_mean[i] = np.mean(resultado[:,i])
         
-        trainned_model.save("{}/model-{}-{}-{}.h5".format(MODELS_FLD,MODEL_ARCH,series_par,model_par))  
+        if WRT_MODEL:
+            trainned_model.save("{}/model-{}-{}-{}.h5".format(MODELS_FLD,MODEL_ARCH,series_par,model_par))  
         
         
         return result_mean, perf_mean, cfg
@@ -695,7 +696,7 @@ class Simulator:
         # usa o pacote pmdarima para determinar a ordem de diferenciação
         # da variável endógena
         period_adf = ndiffs(data['Inv'], test='adf')
-        period_kpss = ndiffs(data['Inv'], test='adf')
+        period_kpss = ndiffs(data['Inv'], test='kpss')
         
         if period_adf > period_kpss:
             period = period_adf
@@ -918,15 +919,15 @@ class Simulator:
     
     
     
-    def neural_ARIMA(self, split = 0.75):
+    def ARIMA(self, split = 0.75):
         
-        data=self.data['Inv']
+        data=self.data
+        col = data.columns[0]
         
-        data = pd.DataFrame(data)
         # usa o pacote pmdarima para determinar a ordem de diferenciação
         # da variável endógena
-        period_adf = ndiffs(data, test='adf')
-        period_kpss = ndiffs(data, test='adf')
+        period_adf = ndiffs(data[col], test='adf')
+        period_kpss = ndiffs(data[col], test='adf')
         
         if period_adf > period_kpss:
             period = period_adf
@@ -957,13 +958,13 @@ class Simulator:
         
         ### PLOT ORIGINAL SERIES ###
 
-        ts_model.plot_series(train_date, train, test_date, test, 'Inv')
+        ts_model.plot_series(train_date, train, test_date, test, data.columns[0])
         
         
         ### PLOT AUTOCORRELATION ###
 
         
-        ts_model.plot_autocor('Inv', train)
+        ts_model.plot_autocor(data.columns[0], train)
         
         ### OPERATE DIFFERENTIATION ###
 
@@ -979,166 +980,32 @@ class Simulator:
         train_init = data.iloc[:len(train)-period,:].copy()
         test_init = data.iloc[len(train)-period:-period,:].copy()
         
-        #train_ext = df_external.iloc[:len(train)-period,:].copy()
-        #test_ext = df_external.iloc[len(train)-period:,:].copy()
- 
-                
+                       
         ## PLOT DIFFERENTIAL SERIES ###
-
-        
-        ts_model.plot_autocor('Inv', train_diff)
+        ts_model.plot_autocor(data.columns[0], train_diff)
         
         ### FIND BEST ARIMA ###
-        arima_result = ts_model.ARIMA(data)
+        arima_result = ts_model.ARIMA(data['Inv'])
         
         ### RETRIVE PREDICTION AND OBTAIN THE CORRESPONDING ACTUAL VALUES ###
-
         date = train_date[-1]
         forward = test.shape[0]
         date_range = pd.date_range(date, periods=forward+1, freq='M', closed='right')
         
-        final_pred = ts_model.retrive_ARIMA_prediction(arima_result, period, df_diff.loc[:date], data.loc[:date], steps = forward)
-        final_true = data.loc[date_range]
+        final_pred = ts_model.retrive_ARIMA_prediction(arima_result, period, 
+                                                       steps = forward)
+        final_true = data['Inv'].loc[date_range]
          
         ### PLOT ACTUAL vs PREDICTION ###
-
-        
-        
+       
         plt.figure(figsize=(16,4))
-        plt.plot(date_range, final_pred[:,0], c='green', label='prediction var')
-        plt.plot(date_range, final_true['Inv'].values, c='orange', label='true')
+        plt.plot(date_range, final_pred[:], c='green', label='prediction ARIMA')
+        plt.plot(date_range, final_true.values, c='orange', label='true')
         plt.ylabel('Inv'); plt.legend()
         plt.show()
     
-        ### GET TRAIN VALIDATION AND TEST DATA FOR NEURAL NETWORK ###
-
-# =============================================================================
-#         X = var_result.fittedvalues
-#         
-#         y_train = train.iloc[period+best_order:].values
-#         y_train_var = X + train_init.iloc[best_order:].values
-#         X_train = np.concatenate([train_diff.iloc[best_order:].values, train_ext.iloc[best_order:].values], axis=1)
-#         X_train_var = np.concatenate([X, train_ext.iloc[best_order:].values], axis=1)
-#         
-#         y_val = y_train[int(len(X)*split):]
-#         y_val_var = y_train_var[int(len(X)*split):]
-#         X_val = X_train[int(len(X)*split):]
-#         X_val_var = X_train_var[int(len(X)*split):]
-#         
-#         y_train = y_train[:int(len(X)*split)]
-#         y_train_var = y_train_var[:int(len(X)*split)]
-#         X_train = X_train[:int(len(X)*split)]
-#         X_train_var = X_train_var[:int(len(X)*split)]
-#         
-#         y_test = test.values
-#         X_test = np.concatenate([test_diff.values, test_ext.values], axis=1)
-#         
-#         ### SCALE DATA ###
-# 
-#         scaler_y = StandardScaler()
-#         scaler = StandardScaler()
-#         
-#         y_train = scaler_y.fit_transform(y_train)
-#         y_train_var = scaler_y.transform(y_train_var)
-#         y_val = scaler_y.transform(y_val)
-#         y_val_var = scaler_y.transform(y_val_var)
-#         y_test = scaler_y.transform(y_test)
-#         
-#         X_train = scaler.fit_transform(X_train)
-#         X_train_var = scaler.transform(X_train_var)
-#         X_val = scaler.transform(X_val)
-#         X_val_var = scaler.transform(X_val_var)
-#         X_test = scaler.transform(X_test)
-#         
-#         ### BUILD DATA GENERATOR ###
-#         seq_length = int(best_order * 1.5)
-#         batch = int(seq_length * 1.5)
-#         generator_train = TimeseriesGenerator(X_train, y_train, length=seq_length, batch_size=batch)
-#         generator_train_var = TimeseriesGenerator(X_train_var, y_train_var, length=seq_length, batch_size=batch)
-#         generator_val = TimeseriesGenerator(X_val, y_val, length=seq_length, batch_size=batch)
-#         generator_val_var = TimeseriesGenerator(X_val_var, y_val_var, length=seq_length, batch_size=batch)
-#         generator_test = TimeseriesGenerator(X_test, y_test, length=seq_length, batch_size=batch)
-#         
-#         
-#         ### FIT NEURAL NETWORK WITH VAR FITTED VALUES AND RAW DATA ###
-# 
-#         tf.random.set_seed(33)
-#         os.environ['PYTHONHASHSEED'] = str(33)
-#         np.random.seed(33)
-#         np.random.seed(33)
-#         
-#         session_conf = tf.compat.v1.ConfigProto(
-#             intra_op_parallelism_threads=1, 
-#             inter_op_parallelism_threads=1
-#         )
-#         sess = tf.compat.v1.Session(
-#             graph=tf.compat.v1.get_default_graph(), 
-#             config=session_conf
-#         )
-#         tf.compat.v1.keras.backend.set_session(sess)
-#         
-#         
-#         es = tf.keras.callbacks.EarlyStopping(patience=30, verbose=1, min_delta=0.001, monitor='val_loss', mode='auto', restore_best_weights=True)
-#         
-#         print('--------', 'train model with VAR fitted values', '--------')
-#         model_var =  nn_model.var_lstm(test.shape[0])   
-#         model_var.fit_generator(generator_train_var, steps_per_epoch= len(generator_train_var),
-#                                 epochs=300, validation_data=generator_val_var, validation_steps = len(generator_val_var), 
-#                                 callbacks=[es], verbose = 1)
-#         
-#         
-#         print('--------', 'train model with raw data', '--------')
-#         model_var.fit_generator(generator_train, steps_per_epoch= len(generator_train),
-#                                 epochs=300, validation_data=generator_val, validation_steps = len(generator_val), 
-#                                 callbacks=[es], verbose = 1)
-#         
-#         ### OBTAIN PREDICTIONS AND RETRIVE ORIGINAL DATA ###
-# 
-#         true = scaler_y.inverse_transform(y_test[seq_length:])
-#         
-#         pred = model_var.predict_generator(generator_test)
-#         pred = scaler_y.inverse_transform(pred)
-#         
-#         
-#         ### FIT NEURAL NETWORK WITH ONLY ORIGINAL DATA ###
-# 
-#         tf.random.set_seed(33)
-#         os.environ['PYTHONHASHSEED'] = str(33)
-#         np.random.seed(33)
-#         np.random.seed(33)
-#         
-#         session_conf = tf.compat.v1.ConfigProto(
-#             intra_op_parallelism_threads=1, 
-#             inter_op_parallelism_threads=1
-#         )
-#         sess = tf.compat.v1.Session(
-#             graph=tf.compat.v1.get_default_graph(), 
-#             config=session_conf
-#         )
-#         tf.compat.v1.keras.backend.set_session(sess)
-#         
-#         
-#         es = keras.callbacks.EarlyStopping(patience=30, verbose=1, min_delta=0.001, monitor='val_loss', mode='auto', restore_best_weights=True)
-#         
-#         simple_model = nn_model.var_lstm(test.shape[0]) 
-#         simple_model.fit_generator(generator_train, steps_per_epoch= len(generator_train),
-#                                     epochs=300, validation_data=generator_val, validation_steps = len(generator_val), 
-#                                     callbacks=[es], verbose = 1)
-#         
-#         os.chdir('../')### OBTAIN PREDICTIONS ###
-# 
-#         pred_simple = simple_model.predict_generator(generator_test)
-#         pred_simple = scaler_y.inverse_transform(pred_simple)
-#         
-#         diz_mae_lstm, diz_mae_var_lstm = compute_mae(data, true, pred, pred_simple)
-#         
-#         diz_mse_lstm, diz_mse_var_lstm = compute_mse(data, true, pred, pred_simple)
-#         
-#         diz_ac_lstm, diz_ac_var_lstm = compute_autocor(data, true, pred, pred_simple)
-# =============================================================================
         
-        
-        return
+        return arima_result
         
     
     
@@ -1161,18 +1028,19 @@ class Simulator:
         None.
 
         """
-        self.config = config
-        
-        
-        config = np.array(config).reshape(len(config[0]),len(config))    
-        
-        self.n_endog = config[0]
-        self.n_steps= config[1] 
-        self.n_train_steps = config[2] 
-        self.n_features = config[3] 
-        self.n_nodes = config[4] 
-        self.n_epochs = config[5] 
-        self.n_batch = config[6]
+        if len(config) > 0:
+            self.config = config
+            
+            
+            config = np.array(config).reshape(len(config[0]),len(config))    
+            
+            self.n_endog = config[0]
+            self.n_steps= config[1] 
+            self.n_train_steps = config[2] 
+            self.n_features = config[3] 
+            self.n_nodes = config[4] 
+            self.n_epochs = config[5] 
+            self.n_batch = config[6]
 
         self.data = data
         self.n_rep = 10
@@ -1353,7 +1221,10 @@ class Simulator:
         """
         
         return MODEL_ARCH
+    def set_wrt_model(self, wrt_model):
     
+        global WRT_MODEL 
+        WRT_MODEL  = wrt_model
 # =============================================================================
 # def main():
 #     print('Simulação do Modelo')

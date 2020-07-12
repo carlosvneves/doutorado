@@ -299,101 +299,109 @@ def run_neuralVAR(data):
     simulator.neural_VAR(max_var_order=6)
     
  
-def run_neuralARIMA(data):
+def run_ARIMA(data):
     
-    config = config_model(n_steps = [36],n_train_steps = [36],
-                          n_nodes=[300],n_epochs=[250],n_batch = [12])
+    config = []
 
     simulator = Simulator(data, config)
-    simulator.neural_ARIMA()
+    arima_result = simulator.ARIMA()
     
+    n_ahead = 36
+    
+    dates_forecast = pd.date_range(start=data.index[-1], periods=n_ahead+1, freq='M')
+    forecast = pd.DataFrame(arima_result.predict(n_ahead), index = dates_forecast[1:], columns=['Predictions'])
+    
+    predictions = pd.concat([data['Inv'],forecast], axis=0)
+    predictions.columns = ['Inv','Predictions']
+    
+    plt.figure()
+    plt.plot(predictions.index[-n_ahead:], predictions['Predictions'][-n_ahead:])
+    plt.plot(predictions.index[:-n_ahead], predictions['Inv'][:-n_ahead])
+    plt.title('Previsões com Modelo ARIMA')
+    plt.xlabel('Ano')
+    plt.ylabel('Investimento (%PIB)')
+    plt.legend()
+    plt.savefig('{}/forecast-{}'.format(FIGS_FLD,'ARIMA'))
+    plt.show()
+        
  
     
-def artificial_forecast(data):
+def synthetic_forecast(data,n_artificial = 12):
     
-    n_artificial = 36
+    #data = load_data()
+    #data = data[['Inv','Agr','Ind','Inf','Com'] ]
+    
+    
     
     data_obs = data.iloc[-n_artificial:,:]
     
-    data_new = data.iloc[:-n_artificial, :]
-    
-    data_artificial = np.zeros((n_artificial,5), dtype='float')
-
-    data_artificial = pd.DataFrame(data_artificial, columns = data.columns)
-    data_artificial.index = data_obs.index
-    
-    data_new = pd.concat((data_new, data_artificial), axis = 0)
-    
-    data_new.iloc[-n_artificial:][['Inv']]  = data_obs[['Inv']]
-    
-    # [4, 36, 36, 5, 300, 300, 32]     
+ 
     config = config_model(n_steps = [36],n_train_steps = [24],
                           n_nodes=[300],n_epochs=[300],n_batch = [32])
 
-    simulator = Simulator(data_new, config)
-    simulator.set_model_arch('LSTM')
-    simulator.set_nrep(1)
+    cols  = []
+    for i in data.columns:
+        cols.append(i + '-Inv' )
     
-    result_mean, perf_mean, cfg = simulator.eval_model(config[0], False )
+    cols.insert(0,'Inv')
     
-    print(result_mean)    
-    # Carrega o modelo que apresentou o melhor resultado na simulação
-    #best_model, _, n_inputs = simulator.load_best_model()
-   
-   
-   
-    
-    #df_proj, pred_list = simulator.forecast(data_new, n_inputs, 24, best_model)
-    
-    #print(pred_list)
-
-    #model_name = 'Inv_art_{}'.format(simulator.get_model_arch())    
-
-    # Cria Data Frame a partir da melhor previsão dentro da amostra
-    #df_NN = pd.DataFrame(best_res, columns=[model_name])
-    #df_NN.index = data.index[-len(df_NN):]     
-  
-    
-    # Cria Data Frame com todos os resultados    
-    #df_proj = pd.concat([df_proj,df_NN], axis=1)
-    
-    #plot_results(df_proj, model_name) 
+    artificial_in = data['Inv']
+    for i in range(data_obs.shape[1]):
+        data_new = data.iloc[:-n_artificial, :]
+        data_artificial = np.zeros((n_artificial,5), dtype='float')
+        data_artificial[0,i] = 1
+        
+        simulator = Simulator(data_new, config)
+        simulator.set_model_arch('LSTM')
+        simulator.set_nrep(1)
+        simulator.set_wrt_model(False)
     
     
+        data_artificial = pd.DataFrame(data_artificial, columns = data.columns)
+        data_artificial.index = data_obs.index
+        
+        data_new = pd.concat((data_new, data_artificial), axis = 0)
+        
+        result_mean, perf_mean, cfg = simulator.eval_model(config[0])
+    
+        artificial_index = config[0][1] + config[0][2] + n_artificial
+        pred = pd.DataFrame(result_mean,index = data.index[artificial_index:])
+        artificial_in = pd.concat([artificial_in, pred], axis=1)
+    
+    artificial_in.columns = cols
+    
+    artificial_out = data    
+    dates_forecast = pd.date_range(start=data.index[-1], periods=2, freq='M')
+    forecast = pd.DataFrame(np.zeros((1, 5)), index = dates_forecast[1:], columns=data.columns)
+    data_new = pd.concat([data,forecast], axis=0)
+    predictions = pd.DataFrame()
+    # [4, 36, 36, 5, 300, 300, 32]     
+    for i in range(artificial_out.shape[1]):
+        data_new.iloc[-1][i] = 1
+        simulator = Simulator(data_new, config)
+        simulator.set_model_arch('LSTM')
+        simulator.set_nrep(1)
+        simulator.set_wrt_model(False)
+    
+        # Carrega o modelo que apresentou o melhor resultado na simulação
+        best_model, best_res, n_inputs = simulator.load_best_model()
+        df_proj, pred_list = simulator.forecast(data_new, n_inputs, n_artificial, best_model)
+        pred = df_proj['Prediction']
+        predictions = pd.concat([predictions, pred], axis=1)
+        data_new.iloc[-1][i] = 0.
+    
+    predictions.iloc[-(n_artificial+1)] = np.ones(5)
+    predictions.columns = cols[1:]
+    artificial_out = pd.concat([data_new, pd.DataFrame(best_res, 
+                                index=data.index[-len(best_res):], columns=['Pred-LSTM']),
+                                predictions], axis=1)
+    
+    with open('{}/{}-steps_insample_pred.pkl'.format(PKL_FLD, n_artificial), 'wb') as fp:
+        pickle.dump(artificial_in, fp) 
     
     
-# =============================================================================
-#      agro = pd.Series(np.full(-n_artificial,np.mean(df.iloc[-n_artificial:]['Agr'])))
-#      ind = pd.Series(np.full(n_before,np.mean(df.iloc[-n_artificial:]['Ind'])))
-#      inf = pd.Series(np.full(n_before,np.mean(df.iloc[-n_artificial:]['Inf'])))
-#      com = pd.Series(np.full(n_before,np.mean(df.iloc[-n_artificial:]['Com'])))
-# 
-# =============================================================================
-     # Make forecasts
-     #n_ahead = 24
-
-# #     agro = pd.Series(np.zeros(n_before))
-# #     ind = pd.Series(np.zeros(n_before))
-# #     inf = pd.Series(np.zeros(n_before))
-# #     com = pd.Series(np.zeros(n_before))
-# # =============================================================================
-#     inv = pd.Series(np.zeros(n_before))
-#     
-#     
-#      
-#     
-#     df_forecast= pd.concat([inv,agro, ind, inf, com], axis=1)
-#     #dates_forecast = pd.date_range(start='2020-01-01', periods=n_before, freq='M')
-#     dates_forecast = pd.date_range(start=df.index[-n_before], periods=n_before, freq='M')
-#     df_forecast.index = pd.DatetimeIndex(dates_forecast)
-#     df_forecast.columns = df.columns
-#     
-#     strip = len(df) - n_before
-#     # ,df.iloc[-n_ahead:],df_forecast
-#     df_forecast = pd.concat((df.iloc[:strip],df_forecast),axis=0)
-# =============================================================================
-
-
+    with open('{}/{}-steps_outsample_par.pkl'.format(PKL_FLD, n_artificial), 'wb') as fp:
+        pickle.dump(artificial_out, fp) 
 
 #%% Função principal
 def main():
@@ -440,8 +448,9 @@ def main():
     #run_cnnn_lstm(df)
     
     #run_neuralVAR(df)
-    run_neuralARIMA(df)
+    #run_ARIMA(df)
     
+    synthetic_forecast(df)
     
     print("**"*25)
     print('-- Fim da Simulação: --')

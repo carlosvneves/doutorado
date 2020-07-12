@@ -195,7 +195,7 @@ class TS_Models:
     
     
     ### UTILITY FUNCTION FOR RETRIVE VAR PREDICTIONS ###
-    def retrive_ARIMA_prediction(self,arima_result, period, prior, prior_init, steps):
+    def retrive_ARIMA_prediction(self,arima_result, period, steps):
         """
         
 
@@ -219,8 +219,8 @@ class TS_Models:
 
         """
         
-        pred = arima_result.predict(n_periods=steps)
-        init = prior_init.tail(period).values
+        pred = arima_result.predict(steps)
+        #init = prior_init.loc[0].tail(period).values
         
         if steps > period:
             id_period = list(range(period))*(steps//period)
@@ -228,10 +228,14 @@ class TS_Models:
         else:
             id_period = list(range(steps))
         
-        final_pred = np.zeros((steps, prior.shape[1]))
+        #final_pred = np.zeros((steps, prior.shape[1]))
+        final_pred = np.zeros((steps))
+        
         for j, (i,p) in enumerate(zip(id_period, pred)):
-            final_pred[j] = init[i]+p
-            init[i] = init[i]+p    
+            
+            #final_pred[j] = init[i]+p
+            final_pred[j] = p
+            #init[i] = init[i]+p    
             
         return final_pred
     
