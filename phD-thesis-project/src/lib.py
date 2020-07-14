@@ -11,10 +11,17 @@ Created on Fri Jul  3 16:37:23 2020
 # bibliotecas para as redes neurais
 import tensorflow as tf
 tf.keras.backend.clear_session()
-from keras.layers.merge import concatenate
+from keras.layers.merge import Concatenate
 from tensorflow import keras
 from tensorflow.python.keras.callbacks import TensorBoard
 from tensorflow.keras.preprocessing.sequence import TimeseriesGenerator
+
+
+
+
+
+
+
 
 
 # bibliotecas matemáticas

@@ -74,8 +74,8 @@ def run_lstm(data):
 
     """
     # [4, 36, 36, 5, 300, 300, 32]     
-    config = config_model(n_steps = [36],n_train_steps = [36],
-                          n_nodes=[300],n_epochs=[300],n_batch = [32])
+    config = config_model(n_steps = [36,24],n_train_steps = [24,36],
+                          n_nodes=[300,50],n_epochs=[300],n_batch = [32])
 
     simulator = Simulator(data, config)
     simulator.set_model_arch('LSTM')
@@ -441,7 +441,7 @@ def main():
     df = df[var]
     
        
-    #run_lstm(df)
+    run_lstm(df)
     #run_lstm_bidirecccional(df)
     #run_lstm_stacked(df)
     #run_gru(df)
@@ -450,7 +450,7 @@ def main():
     #run_neuralVAR(df)
     #run_ARIMA(df)
     
-    synthetic_forecast(df)
+    #synthetic_forecast(df)
     
     print("**"*25)
     print('-- Fim da Simulação: --')

@@ -223,7 +223,7 @@ class Simulator:
           test_x = test_x.reshape((test_x.shape[0], n_steps*n_features))
           
           # invert scaling for forecast
-          inv_yhat = concatenate((yhat, test_x[:, -n_endog:]), axis=1)##
+          inv_yhat =  keras.layers.concatenate([yhat, test_x[:, -n_endog:]], axis=1)## windows --> concatenate --> Concatenate
           yhat = scaler.inverse_transform(inv_yhat)
           yhat = yhat[:,0]
           
@@ -237,7 +237,7 @@ class Simulator:
           
           # invert scaling for actual
           test_y = test_y.reshape((len(test_y), 1))
-          inv_y = concatenate((test_y, test_x[:, -n_endog:]), axis=1)
+          inv_y =  keras.layers.concatenate([test_y, test_x[:, -n_endog:]], axis=1)## windows --> concatenate --> Concatenate
           y = scaler.inverse_transform(inv_y)
           y = y[:,0]
           
@@ -535,7 +535,7 @@ class Simulator:
             batch = test_X[i].reshape((1, n_inputs, n_features))
             pred = model.predict(batch, verbose=1)
             batch = batch.reshape((1, n_inputs*n_features))
-            inv_y = concatenate((np.array(pred), batch[:, -n_exog:]), axis=1)
+            inv_y = keras.layers.concatenate([np.array(pred), batch[:, -n_exog:]], axis=1)
             y_unscaled.append(np.array(inv_y))
             y = scaler.inverse_transform(inv_y)
             pred_list.append(y)
@@ -1032,7 +1032,20 @@ class Simulator:
             self.config = config
             
             
-            config = np.array(config).reshape(len(config[0]),len(config))    
+# =============================================================================
+#             config = np.array(config).reshape(len(config[0]),len(config))    
+#             
+#             self.n_endog = config[0]
+#             self.n_steps= config[1] 
+#             self.n_train_steps = config[2] 
+#             self.n_features = config[3] 
+#             self.n_nodes = config[4] 
+#             self.n_epochs = config[5] 
+#             self.n_batch = config[6]
+# =============================================================================
+            
+            
+            self.config = config
             
             self.n_endog = config[0]
             self.n_steps= config[1] 
